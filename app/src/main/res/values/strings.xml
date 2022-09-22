@@ -39,5 +39,8 @@
     <string name="enter">进入操作</string>
     <string name="save_file">保存文件</string>
     <string name="notify_rx">设置接收</string>
+    <string name="upload">上传</string>
+    <string name="download">下载</string>
+    <string name="settings">设置</string>
 
 </resources>

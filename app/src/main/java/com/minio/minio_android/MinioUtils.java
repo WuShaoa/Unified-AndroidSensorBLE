@@ -31,7 +31,7 @@ public class MinioUtils {
     private String ACCOUNT = "huang";
     private String SECRET_KEY = "asdfghj999";
 
-    MinioUtils() {}
+    public MinioUtils() {}
 
     public MinioUtils resetEndPoint(String endPoint){
         END_POINT = endPoint;

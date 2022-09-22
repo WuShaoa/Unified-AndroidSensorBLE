@@ -1,6 +1,7 @@
 package com.main;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
@@ -12,10 +13,14 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.FileUtils;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
@@ -30,6 +35,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
@@ -51,8 +57,10 @@ import com.clj.fastble.scan.BleScanRuleConfig;
 
 import com.main.R;
 import com.main.operation.OperationActivity;
+import com.minio.minio_android.MinioUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 
@@ -61,7 +69,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int REQUEST_CODE_OPEN_GPS = 1;
-    private static final int REQUEST_CODE_PERMISSION_LOCATION = 2;
+    private static final int REQUEST_CODE_PERMISSIONS = 2;
 
     private LinearLayout layout_setting;
     private TextView txt_setting;
@@ -69,6 +77,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private EditText et_name, et_mac, et_uuid;
     private Switch sw_auto;
     private ImageView img_loading;
+
+    MinioUtils client = new MinioUtils();
+
+    private MinioUtils storageServer;
+    private String data_path;
+    private String model_path;
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
@@ -79,6 +93,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initView();
+
+        DocumentTool.verifyStoragePermissions(MainActivity.this);
 
         BleManager.getInstance().init(getApplication());
         BleManager.getInstance()
@@ -122,6 +138,59 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 }
                 break;
         }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.minio_settings, menu);
+        return super.onCreateOptionsMenu(menu);
+    }
+
+    @SuppressLint("NonConstantResourceId")
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.minio_upload:
+                uploadSavedData();
+                return true;
+            case R.id.minio_download:
+                downloadModel();
+                return true;
+            default://TODO Settings
+               return super.onOptionsItemSelected(item);
+        }
+    }
+
+    private void downloadModel(){
+        Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            // Upload
+            // Todo: Batch upload
+            //Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
+            client.resetAccount("minioadmin")
+                    .resetSecretKey("minioadmin123")
+                    .resetEndPoint("http://10.68.142.34")
+                    .resetBucketName("test")
+                    .download("measure_notes.pdf",Environment.getExternalStorageDirectory().getPath() + "/Download/model.PDF");
+            //Toast.makeText(this, "Download Success!",Toast.LENGTH_SHORT).show();
+        }).start();
+    }
+
+    private void uploadSavedData(){
+        Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            // Upload
+            // Todo: Privacy
+            //Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
+            client.resetAccount("minioadmin")
+                    .resetSecretKey("minioadmin123")
+                    .resetEndPoint("http://10.68.142.34")
+                    .resetBucketName("test")
+                    .upload(Environment.getExternalStorageDirectory().getPath() + "/Download/part1.PDF",
+                            "/Download/part1.pdf");
+            //Toast.makeText(this, "Upload Success!",Toast.LENGTH_SHORT).show();
+        }).start();
     }
 
     private void initView() {
@@ -191,6 +260,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
                     @Override
                     public void onCharacteristicChanged(byte[] data) {
+                        // Save data to file here
                         DocumentTool.appendFileData("bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", data);
                     }
                 });
@@ -364,7 +434,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                                                  @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         switch (requestCode) {
-            case REQUEST_CODE_PERMISSION_LOCATION:
+            case REQUEST_CODE_PERMISSIONS:
                 if (grantResults.length > 0) {
                     for (int i = 0; i < grantResults.length; i++) {
                         if (grantResults[i] == PackageManager.PERMISSION_GRANTED) {
@@ -383,7 +453,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             return;
         }
 
-        String[] permissions = {Manifest.permission.ACCESS_FINE_LOCATION};
+        List<String> permissions = new ArrayList<>(Arrays.asList(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE));
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN);    //this permission is only for API >= S (31)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
+        } else { permissions.add(Manifest.permission.ACCESS_FINE_LOCATION); }
+
         List<String> permissionDeniedList = new ArrayList<>();
         for (String permission : permissions) {
             int permissionCheck = ContextCompat.checkSelfPermission(this, permission);
@@ -395,40 +472,38 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
         if (!permissionDeniedList.isEmpty()) {
             String[] deniedPermissions = permissionDeniedList.toArray(new String[permissionDeniedList.size()]);
-            ActivityCompat.requestPermissions(this, deniedPermissions, REQUEST_CODE_PERMISSION_LOCATION);
+            ActivityCompat.requestPermissions(this, deniedPermissions, REQUEST_CODE_PERMISSIONS);
         }
     }
 
     private void onPermissionGranted(String permission) {
-        switch (permission) {
-            case Manifest.permission.ACCESS_FINE_LOCATION:
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !checkGPSIsOpen()) {
-                    new AlertDialog.Builder(this)
-                            .setTitle(R.string.notifyTitle)
-                            .setMessage(R.string.gpsNotifyMsg)
-                            .setNegativeButton(R.string.cancel,
-                                    new DialogInterface.OnClickListener() {
-                                        @Override
-                                        public void onClick(DialogInterface dialog, int which) {
-                                            finish();
-                                        }
-                                    })
-                            .setPositiveButton(R.string.setting,
-                                    new DialogInterface.OnClickListener() {
-                                        @Override
-                                        public void onClick(DialogInterface dialog, int which) {
-                                            Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                                            startActivityForResult(intent, REQUEST_CODE_OPEN_GPS);
-                                        }
-                                    })
+        if (Manifest.permission.ACCESS_FINE_LOCATION.equals(permission)) {
+            if (!checkGPSIsOpen()) {
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.notifyTitle)
+                        .setMessage(R.string.gpsNotifyMsg)
+                        .setNegativeButton(R.string.cancel,
+                                new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        finish();
+                                    }
+                                })
+                        .setPositiveButton(R.string.setting,
+                                new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                                        startActivityForResult(intent, REQUEST_CODE_OPEN_GPS);
+                                    }
+                                })
 
-                            .setCancelable(false)
-                            .show();
-                } else {
-                    setScanRule();
-                    startScan();
-                }
-                break;
+                        .setCancelable(false)
+                        .show();
+            } else {
+                setScanRule();
+                startScan();
+            }
         }
     }
 

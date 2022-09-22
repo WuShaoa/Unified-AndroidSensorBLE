@@ -39,5 +39,8 @@
     <string name="enter">Enter</string>
     <string name="notify_rx">Receive</string>
     <string name="save_file">Save</string>
+    <string name="upload">upload</string>
+    <string name="download">download</string>
+    <string name="settings">settings</string>
 
 </resources>

@@ -4,17 +4,31 @@
     package="com.main">
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
+    <uses-permission android:name="android.permission.BLUETOOTH"
+                     android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
+                     android:maxSdkVersion="30"/>
 
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- 查找蓝牙设备权限 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- 与已配对的蓝牙设备通信 -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- No need for Adk > 30 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!--外部存储的写权限-->
+
+    <!--外部存储权限-->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-    <!--外部存储的读权限-->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!--网络权限-->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -23,6 +37,8 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.BLEAndroid"
         tools:targetApi="31" >
         <activity android:name=".MainActivity"

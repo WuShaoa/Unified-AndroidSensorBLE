@@ -1,5 +1,6 @@
 package com.clj.blesample;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -16,6 +17,9 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Created by 98426 on 2019/4/17.
@@ -27,14 +31,19 @@ public class DocumentTool {
      * 【动态申请SD卡读写的权限】
      * Android6.0之后系统对权限的管理更加严格了，不但要在AndroidManifest中添加，还要在应用运行的时候动态申请
      * **/
-    private static final int REQUEST_EXTERNAL_STORAGE = 1 ;
-    private static String[] PERMISSON_STORAGE = {"android.permission.READ_EXTERNAL_STORAGE",
-            "android.permission.WRITE_EXTERNAL_STORAGE"};
+    private static final int REQUEST_STORAGE = 10 ;
+    private static String[] PERMISSON_STORAGE = {Manifest.permission.WRITE_EXTERNAL_STORAGE,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.MANAGE_EXTERNAL_STORAGE}; // Only for API > 30
     public static void verifyStoragePermissions(Activity activity){
         try {
-            int permission = ActivityCompat.checkSelfPermission(activity,"android.permission.WRITE_EXTERNAL_STORAGE");
-            if(permission!= PackageManager.PERMISSION_GRANTED){/**【判断是否已经授予权限】**/
-                ActivityCompat.requestPermissions(activity,PERMISSON_STORAGE,REQUEST_EXTERNAL_STORAGE);
+            for (String p:
+                    PERMISSON_STORAGE) {
+
+                int permission = ActivityCompat.checkSelfPermission(activity, p);
+                if (permission != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(activity, PERMISSON_STORAGE, REQUEST_STORAGE);
+                }
             }
         }catch (Exception e){
             e.printStackTrace();

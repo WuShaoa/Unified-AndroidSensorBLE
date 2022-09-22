@@ -41,6 +41,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
+import com.bluetoothlegatt.BleUartDataReceiver;
 import com.clj.blesample.DocumentTool;
 import com.clj.blesample.GattAttributes;
 import com.clj.blesample.adapter.DeviceAdapter;
@@ -59,6 +60,8 @@ import com.main.R;
 import com.main.operation.OperationActivity;
 import com.minio.minio_android.MinioUtils;
 
+import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -77,6 +80,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private EditText et_name, et_mac, et_uuid;
     private Switch sw_auto;
     private ImageView img_loading;
+
+    private BleUartDataReceiver dataParser = new BleUartDataReceiver();
 
     MinioUtils client = new MinioUtils();
 
@@ -170,7 +175,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             //Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
             client.resetAccount("minioadmin")
                     .resetSecretKey("minioadmin123")
-                    .resetEndPoint("http://10.68.142.34")
+                    .resetEndPoint("http://10.68.142.34:9000")
                     .resetBucketName("test")
                     .download("measure_notes.pdf",Environment.getExternalStorageDirectory().getPath() + "/Download/model.PDF");
             //Toast.makeText(this, "Download Success!",Toast.LENGTH_SHORT).show();
@@ -178,19 +183,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void uploadSavedData(){
+        String path = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
+        File file = new File(path);
+        String[] files = file.list();
+
         Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            // Upload
-            // Todo: Privacy
-            //Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
-            client.resetAccount("minioadmin")
-                    .resetSecretKey("minioadmin123")
-                    .resetEndPoint("http://10.68.142.34")
-                    .resetBucketName("test")
-                    .upload(Environment.getExternalStorageDirectory().getPath() + "/Download/part1.PDF",
-                            "/Download/part1.pdf");
-            //Toast.makeText(this, "Upload Success!",Toast.LENGTH_SHORT).show();
-        }).start();
+
+        if (files != null)
+        for (String name : files) {
+            new Thread(() -> {
+                // Upload
+                // Todo: Privacy
+                client.resetAccount("minioadmin")
+                        .resetSecretKey("minioadmin123")
+                        .resetEndPoint("http://10.68.142.34:9000")
+                        .resetBucketName("test")
+                        .upload(path + '/' + name,
+                                name);
+                //Toast.makeText(this, "Upload Success!",Toast.LENGTH_SHORT).show();
+            }).start();
+        }
     }
 
     private void initView() {
@@ -259,9 +271,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     }
 
                     @Override
-                    public void onCharacteristicChanged(byte[] data) {
-                        // Save data to file here
-                        DocumentTool.appendFileData("bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", data);
+                    public synchronized void onCharacteristicChanged(byte[] data) {
+                        dataParser.receiveData(data);
+                        dataParser.parseData();
+                        dataParser.setCb((parsed_data -> {
+                            // Save data to file here
+                            DocumentTool.addFolder("Download/bleReceived/");
+                            //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
+                            DocumentTool.appendFileData("Download/bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
+                        }));
                     }
                 });
 

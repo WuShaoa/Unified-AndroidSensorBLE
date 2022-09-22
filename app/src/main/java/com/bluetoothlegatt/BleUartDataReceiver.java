@@ -12,8 +12,10 @@ public class BleUartDataReceiver {
     private BleUartDataReceiverCallback cb;
     private final static String TAG = "BleUartDataReceiver";
 
-    public BleUartDataReceiver(BleUartDataReceiverCallback callback){
-        cb = callback;
+    public BleUartDataReceiver(){}
+
+    public void setCb(BleUartDataReceiverCallback cb) {
+        this.cb = cb;
     }
 
     public synchronized void receiveData(byte[] data) {
@@ -40,7 +42,8 @@ public class BleUartDataReceiver {
             String[] words = l.split(" +"); //split by spaces
             parsedData.fromStringArray(words);
             Log.i(TAG, "data parsed.");
-            cb.onBleUartDataReceived(parsedData); //callback
+            if(cb != null)
+                cb.onBleUartDataReceived(parsedData); //callback
         }
     }
 

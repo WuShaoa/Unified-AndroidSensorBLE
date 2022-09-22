@@ -20,6 +20,7 @@ import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
+import com.clj.blesample.GattAttributes;
 import com.main.R;
 
 import java.util.ArrayList;
@@ -152,7 +153,8 @@ public class CharacteristicListFragment extends Fragment {
             BluetoothGattCharacteristic characteristic = characteristicList.get(position);
             String uuid = characteristic.getUuid().toString();
 
-            holder.txt_title.setText(String.valueOf(getActivity().getString(R.string.characteristic) + "（" + position + ")"));
+            String title = GattAttributes.lookup(uuid,String.valueOf(getActivity().getString(R.string.characteristic) + "（" + position + ")"));
+            holder.txt_title.setText(title);
             holder.txt_uuid.setText(uuid);
 
             StringBuilder property = new StringBuilder();

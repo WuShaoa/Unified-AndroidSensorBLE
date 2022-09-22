@@ -16,6 +16,7 @@ import android.widget.TextView;
 
 import androidx.fragment.app.Fragment;
 
+import com.bluetoothlegatt.BleUartDataReceiver;
 import com.main.R;
 import com.clj.fastble.BleManager;
 import com.clj.fastble.callback.BleIndicateCallback;
@@ -245,12 +246,11 @@ public class CharacteristicOperationFragment extends Fragment {
 
                                             @Override
                                             public void onCharacteristicChanged(byte[] data) {
-                                                runOnUiThread(new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        addText(txt, HexUtil.formatHexString(characteristic.getValue(), true));
-                                                    }
+                                                ((OperationActivity) getActivity()).getParser().setCb(parsed_data -> {
+                                                    runOnUiThread(() -> addText(txt, parsed_data.toString()));
                                                 });
+                                                ((OperationActivity) getActivity()).getParser().receiveData(characteristic.getValue());
+                                                ((OperationActivity) getActivity()).getParser().parseData();
                                             }
                                         });
                             } else {
@@ -303,12 +303,7 @@ public class CharacteristicOperationFragment extends Fragment {
 
                                             @Override
                                             public void onCharacteristicChanged(byte[] data) {
-                                                runOnUiThread(new Runnable() {
-                                                    @Override
-                                                    public void run() {
-                                                        addText(txt, HexUtil.formatHexString(characteristic.getValue(), true));
-                                                    }
-                                                });
+                                                runOnUiThread(() -> addText(txt, HexUtil.formatHexString(data, true)));
                                             }
                                         });
                             } else {

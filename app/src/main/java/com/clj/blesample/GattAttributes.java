@@ -23,7 +23,7 @@ public class GattAttributes {
     }
 
     public static String lookup(String uuid, String defaultName) {
-        String name = attributes.get(uuid);
+        String name = attributes.get(uuid.toLowerCase());
         return name == null ? defaultName : name;
     }
 }

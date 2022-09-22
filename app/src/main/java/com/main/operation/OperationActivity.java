@@ -12,6 +12,8 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
+import com.bluetoothlegatt.BleUartDataReceiver;
+import com.clj.fastble.utils.HexUtil;
 import com.main.R;
 import com.clj.blesample.comm.Observer;
 import com.clj.blesample.comm.ObserverManager;
@@ -29,6 +31,8 @@ public class OperationActivity extends AppCompatActivity implements Observer {
     private BluetoothGattService bluetoothGattService;
     private BluetoothGattCharacteristic characteristic;
     private int charaProp;
+
+    private BleUartDataReceiver dataParser = new BleUartDataReceiver();
 
     private Toolbar toolbar;
     private List<Fragment> fragments = new ArrayList<>();
@@ -169,6 +173,8 @@ public class OperationActivity extends AppCompatActivity implements Observer {
     public int getCharaProp() {
         return charaProp;
     }
+
+    public BleUartDataReceiver getParser() {return dataParser; }
 
     public void setCharaProp(int charaProp) {
         this.charaProp = charaProp;

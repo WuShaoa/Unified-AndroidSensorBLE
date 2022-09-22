@@ -90,7 +90,6 @@ public class DocumentTool {
                     boolean isSuccess = newFile.createNewFile();
                     Log.i("TAG:","文件创建状态--->"+isSuccess);
                     Log.i("TAG:","文件所在路径："+newFile.toString());
-                    deleteFile(newFile);
                 }
             }catch (Exception e){
                 e.printStackTrace();
@@ -137,6 +136,13 @@ public class DocumentTool {
                 File sdCard = Environment.getExternalStorageDirectory();
                 File file = new File(sdCard, name);
                 file.setWritable(true);
+
+                if(!file.exists()){
+                    boolean isSuccess = file.createNewFile();
+                    Log.i("TAG:","文件创建状态--->"+isSuccess);
+                    Log.i("TAG:","文件所在路径："+file.toString());
+                }
+
 
                 RandomAccessFile raf = new RandomAccessFile(file,"rw");  //按读写方式
                 raf.seek(file.length());                                        //将文件指针移到文件尾

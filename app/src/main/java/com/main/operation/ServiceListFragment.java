@@ -16,6 +16,7 @@ import android.widget.TextView;
 
 import androidx.fragment.app.Fragment;
 
+import com.clj.blesample.GattAttributes;
 import com.main.R;
 import com.clj.fastble.BleManager;
 import com.clj.fastble.data.BleDevice;
@@ -122,7 +123,8 @@ public class ServiceListFragment extends Fragment {
             BluetoothGattService service = bluetoothGattServices.get(position);
             String uuid = service.getUuid().toString();
 
-            holder.txt_title.setText(String.valueOf(getActivity().getString(R.string.service) + "(" + position + ")"));
+            String title = GattAttributes.lookup(uuid,String.valueOf(getActivity().getString(R.string.service) + "(" + position + ")"));
+            holder.txt_title.setText(title);
             holder.txt_uuid.setText(uuid);
             holder.txt_type.setText(getActivity().getString(R.string.type));
             return convertView;

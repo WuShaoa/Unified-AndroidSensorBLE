@@ -10,17 +10,20 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.bluetoothlegatt.BleUartDataReceiver;
 import com.main.R;
 import com.clj.fastble.BleManager;
 import com.clj.fastble.data.BleDevice;
 
 import java.util.ArrayList;
+import java.util.Hashtable;
 import java.util.List;
 
 public class DeviceAdapter extends BaseAdapter {
 
-    private final Context context;
+    private Context context;
     private final List<BleDevice> bleDeviceList = new ArrayList<>();
+    private Hashtable<String, BleUartDataReceiver> receivers = new Hashtable<>();
 
     public DeviceAdapter(Context context) {
         this.context = context;
@@ -28,13 +31,19 @@ public class DeviceAdapter extends BaseAdapter {
 
     public void addDevice(BleDevice bleDevice) {
         removeDevice(bleDevice);
+        receivers.put(bleDevice.getKey(), new BleUartDataReceiver());
         bleDeviceList.add(bleDevice);
+    }
+
+    public BleUartDataReceiver getParser(String key){
+        return receivers.get(key);
     }
 
     public void removeDevice(BleDevice bleDevice) {
         for (int i = 0; i < bleDeviceList.size(); i++) {
             BleDevice device = bleDeviceList.get(i);
             if (bleDevice.getKey().equals(device.getKey())) {
+                receivers.remove(device.getKey());
                 bleDeviceList.remove(i);
             }
         }
@@ -44,6 +53,7 @@ public class DeviceAdapter extends BaseAdapter {
         for (int i = 0; i < bleDeviceList.size(); i++) {
             BleDevice device = bleDeviceList.get(i);
             if (BleManager.getInstance().isConnected(device)) {
+                receivers.remove(device.getKey());
                 bleDeviceList.remove(i);
             }
         }
@@ -53,6 +63,7 @@ public class DeviceAdapter extends BaseAdapter {
         for (int i = 0; i < bleDeviceList.size(); i++) {
             BleDevice device = bleDeviceList.get(i);
             if (!BleManager.getInstance().isConnected(device)) {
+                receivers.remove(device.getKey());
                 bleDeviceList.remove(i);
             }
         }

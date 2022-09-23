@@ -10,9 +10,4 @@
         android:id="@+id/minio_upload"
         android:icon="@android:drawable/arrow_up_float"
         android:title="@string/upload" />
-    <item
-        android:id="@+id/minio_settings_switch"
-        android:icon="@android:drawable/ic_menu_more"
-        android:title="@string/settings"
-        app:actionLayout="@layout/switch_item" />
 </menu>

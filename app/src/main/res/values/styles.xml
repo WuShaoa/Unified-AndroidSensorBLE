@@ -7,4 +7,9 @@
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <style name="EchartsView" parent="">
+        <item name="android:background">@color/design_default_color_background</item>
+        <item name="exampleColor">@color/design_default_color_secondary</item>
+    </style>
+
 </resources>

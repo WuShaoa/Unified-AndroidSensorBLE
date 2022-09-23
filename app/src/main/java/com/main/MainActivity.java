@@ -10,11 +10,11 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
 import android.location.LocationManager;
-import android.os.Build;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
-import android.os.FileUtils;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
@@ -25,6 +25,8 @@ import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.animation.LinearInterpolator;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -35,13 +37,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.bluetoothlegatt.BleUartDataReceiver;
+import com.bluetoothlegatt.EchartOptionUtil;
+import com.bluetoothlegatt.EchartView;
+import com.bluetoothlegatt.MotionClassifier;
+import com.bluetoothlegatt.SampleGattAttributes;
 import com.clj.blesample.DocumentTool;
 import com.clj.blesample.GattAttributes;
 import com.clj.blesample.adapter.DeviceAdapter;
@@ -56,12 +61,13 @@ import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.exception.BleException;
 import com.clj.fastble.scan.BleScanRuleConfig;
 
-import com.main.R;
 import com.main.operation.OperationActivity;
 import com.minio.minio_android.MinioUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -78,20 +84,29 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private TextView txt_setting;
     private Button btn_scan;
     private EditText et_name, et_mac, et_uuid;
+    private EditText minio_user, minio_password, minio_link;
     private Switch sw_auto;
     private ImageView img_loading;
 
-    private BleUartDataReceiver dataParser = new BleUartDataReceiver();
+    private MinioUtils client = new MinioUtils();
+    private MotionClassifier mMotionClassifier;
 
-    MinioUtils client = new MinioUtils();
+    private static final int LENGTH = 50; //length of data shown
+    private EchartView mLineChart;
+    boolean mEnableRefresh = false;
+    int mCounter = 0; //counting predicted outputs
+    Integer[] x = new Integer[LENGTH];
+    Float[] y = new Float[LENGTH];
 
-    private MinioUtils storageServer;
-    private String data_path;
-    private String model_path;
+    private final String data_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
+    private final String model_dir = Uri.parse("file:///android_asset/").getPath();
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
     private ProgressDialog progressDialog;
+
+    public MainActivity() throws IOException {
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -107,6 +122,42 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .setReConnectCount(1, 5000)
                 .setConnectOverTime(20000)
                 .setOperateTimeout(5000);
+
+        //default client settings
+        client = client.resetAccount("minioadmin")
+                .resetSecretKey("minioadmin123")
+                .resetEndPoint("http://10.68.142.34:9000")
+                .resetBucketName("test");
+
+        mMotionClassifier = new MotionClassifier(this);
+
+        Arrays.fill(x, 0);
+        Arrays.fill(y,0f);
+
+        mLineChart = findViewById(R.id.data_chart);
+        mLineChart.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                //refreshLineChart();
+                //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
+                runOnUiThread(()-> {
+                    mEnableRefresh = true;
+                });
+            }
+        });
+    }
+
+    private void refreshLineChart(Object[] x, Object[] y){
+//        Object[] x = new Object[]{
+//                "1", "2", "3", "4", "5", "6", "7"
+//        };
+//        Object[] y = new Object[]{
+//                820, 932, 901, 934, 1290, 1330, 1320
+//        };
+        if(mEnableRefresh){
+            mLineChart.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
+        }
     }
 
     @Override
@@ -167,40 +218,36 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    private void configureClient(){
+        String user = minio_user.getText().toString();
+        if(!TextUtils.isEmpty(user)) client = client.resetAccount(user);
+        String password = minio_password.getText().toString();
+        if(!TextUtils.isEmpty(password)) client = client.resetSecretKey(password);
+        String link = minio_link.getText().toString();
+        if(!TextUtils.isEmpty(link)) client = client.resetEndPoint(link);
+    }
+
     private void downloadModel(){
         Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
         new Thread(() -> {
-            // Upload
-            // Todo: Batch upload
-            //Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
-            client.resetAccount("minioadmin")
-                    .resetSecretKey("minioadmin123")
-                    .resetEndPoint("http://10.68.142.34:9000")
-                    .resetBucketName("test")
-                    .download("measure_notes.pdf",Environment.getExternalStorageDirectory().getPath() + "/Download/model.PDF");
-            //Toast.makeText(this, "Download Success!",Toast.LENGTH_SHORT).show();
+            configureClient();
+            client.download("new_model.tflite",Environment.getExternalStorageDirectory().getPath() + "/Upload/new_model.tflite");
+            Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
         }).start();
     }
 
     private void uploadSavedData(){
-        String path = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
-        File file = new File(path);
-        String[] files = file.list();
+        File dir = new File(data_dir);
+        String[] files = dir.list();
 
         Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
 
         if (files != null)
         for (String name : files) {
             new Thread(() -> {
-                // Upload
-                // Todo: Privacy
-                client.resetAccount("minioadmin")
-                        .resetSecretKey("minioadmin123")
-                        .resetEndPoint("http://10.68.142.34:9000")
-                        .resetBucketName("test")
-                        .upload(path + '/' + name,
-                                name);
-                //Toast.makeText(this, "Upload Success!",Toast.LENGTH_SHORT).show();
+                configureClient();
+                client.upload(Paths.get(data_dir,name).toAbsolutePath().toString(), name);
+                Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
             }).start();
         }
     }
@@ -217,6 +264,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         et_mac = (EditText) findViewById(R.id.et_mac);
         et_uuid = (EditText) findViewById(R.id.et_uuid);
         sw_auto = (Switch) findViewById(R.id.sw_auto);
+
+        minio_user = (EditText) findViewById(R.id.minio_user);
+        minio_password = (EditText) findViewById(R.id.minio_password);
+        minio_link = (EditText) findViewById(R.id.minio_link);
 
         layout_setting = (LinearLayout) findViewById(R.id.layout_setting);
         txt_setting = (TextView) findViewById(R.id.txt_setting);
@@ -271,15 +322,39 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     }
 
                     @Override
-                    public synchronized void onCharacteristicChanged(byte[] data) {
-                        dataParser.receiveData(data);
-                        dataParser.parseData();
-                        dataParser.setCb((parsed_data -> {
-                            // Save data to file here
-                            DocumentTool.addFolder("Download/bleReceived/");
-                            //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
-                            DocumentTool.appendFileData("Download/bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
-                        }));
+                    public void onCharacteristicChanged(byte[] data) {
+                        // Parsing data here
+                        BleUartDataReceiver data_parser = mDeviceAdapter.getParser(bleDevice.getKey());
+                        data_parser.receiveData(data);
+                        data_parser.parseData();
+                        data_parser.setCb(parsed_data -> new Thread(()-> {
+                        // Save data to file here
+                        DocumentTool.addFolder("Download/bleReceived/");
+                        //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
+                        DocumentTool.appendFileData("Download/bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
+
+                        // predict & show on echarts here
+                        if(mCounter == LENGTH) {
+                            x = Arrays.copyOfRange(x, 1, LENGTH);
+                            x = Arrays.copyOf(x, LENGTH);
+                            x[LENGTH - 1] = parsed_data.timeStamp;
+
+                            y = Arrays.copyOfRange(y, 1, LENGTH);
+                            y = Arrays.copyOf(y, LENGTH);
+                            y[LENGTH - 1] = mMotionClassifier.classifyMotion(parsed_data.toFloatList())[0];//data.press_ao
+                        } else {
+                            x[mCounter] = parsed_data.timeStamp;
+                            y[mCounter] = mMotionClassifier.classifyMotion(parsed_data.toFloatList())[0]; //TODO: buffer & classify
+                            mCounter++;
+                        }
+
+                        if(mEnableRefresh && x[0] != null && y[0] != null) {
+                            Integer[] finalX = x;
+                            Float[] finalY = y;
+                            runOnUiThread(() -> refreshLineChart(finalX, finalY));
+                        }
+
+                        }).start());
                     }
                 });
 
@@ -310,7 +385,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         } else {
             uuids = str_uuid.split(",");
         }
+
+        // APP function specific
         UUID[] serviceUuids = null;
+
         if (uuids != null && uuids.length > 0) {
             serviceUuids = new UUID[uuids.length];
             for (int i = 0; i < uuids.length; i++) {
@@ -327,7 +405,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         String[] names;
         String str_name = et_name.getText().toString();
         if (TextUtils.isEmpty(str_name)) {
-            names = null;
+            names = new String[] {"ATK-BLE01"};
         } else {
             names = str_name.split(",");
         }

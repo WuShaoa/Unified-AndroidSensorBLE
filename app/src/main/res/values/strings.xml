@@ -42,5 +42,11 @@
     <string name="upload">上传</string>
     <string name="download">下载</string>
     <string name="settings">设置</string>
+    <string name="setting_minio_user" translatable="false">Minio用户名</string>
+    <string name="setting_minio_password" translatable="false">Minio密码</string>
+    <string name="setting_minio_link" translatable="false">Minio服务地址</string>
+    <string name="alert_notification" translatable="false">您没事儿吧？</string>
+    <string name="alert_yes" translatable="false">我有事！</string>
+    <string name="alert_no" translatable="false">我没事。</string>
 
 </resources>

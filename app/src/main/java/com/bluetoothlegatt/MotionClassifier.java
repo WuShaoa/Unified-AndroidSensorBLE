@@ -51,11 +51,15 @@ public class MotionClassifier {
     /** An instance of host activity.*/
     private Activity activity = null;
 
-    MotionClassifier(Activity activity) throws IOException {
+    public MotionClassifier(Activity activity) {
         // TODO(b/169965231): Add support for delegates.
         this.activity = activity;
 
-        initializeModel();
+        try {
+            initializeModel();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         predictionOutput = new float[1][1];
         Log.d(TAG, "Created a MotionClassifier.");
@@ -84,8 +88,11 @@ public class MotionClassifier {
     public float[] classifyMotion(float[] input){
         sensorDataInput[0][0] = Arrays.copyOf(input, DIM_DATA_SIZE);
 
-        tflite.run(sensorDataInput, predictionOutput);
-
+        try {
+            tflite.run(sensorDataInput, predictionOutput);
+        } catch (InternalError e) {
+            return new float[]{0.0F};
+        }
         return predictionOutput[0];
     }
 

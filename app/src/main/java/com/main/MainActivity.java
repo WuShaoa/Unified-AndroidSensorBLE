@@ -3,6 +3,10 @@ package com.main;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGatt;
@@ -13,6 +17,7 @@ import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
@@ -32,6 +37,7 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.RemoteViews;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -40,6 +46,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
 import com.bluetoothlegatt.BleUartDataReceiver;
@@ -79,6 +86,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int REQUEST_CODE_OPEN_GPS = 1;
     private static final int REQUEST_CODE_PERMISSIONS = 2;
+    private static final String CHANNEL_ID = "com.main.alert.channel";
+    private static final int NOTIFICATION_ID = 1; //"com.main.alert.notification";
 
     private LinearLayout layout_setting;
     private TextView txt_setting;
@@ -87,6 +96,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private EditText minio_user, minio_password, minio_link;
     private Switch sw_auto;
     private ImageView img_loading;
+
+    RemoteViews notificationLayout = new RemoteViews(getPackageName(), R.layout.notification_layout);
+    NotificationManager alertManager;
 
     private MinioUtils client = new MinioUtils();
     private MotionClassifier mMotionClassifier;
@@ -99,13 +111,67 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     Float[] y = new Float[LENGTH];
 
     private final String data_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
-    private final String model_dir = Uri.parse("file:///android_asset/").getPath();
+    private String model_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/models";
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
     private ProgressDialog progressDialog;
 
     public MainActivity() throws IOException {
+    }
+
+    // Alert notification settings
+    private void emitAlert(){
+
+//        Notification alertNotification = new NotificationCompat.Builder(this, CHANNEL_ID)
+//                .setSmallIcon(R.mipmap.ic_launcher)
+//                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
+//                .setCustomContentView(notificationLayout)
+//                .setCustomBigContentView(notificationLayout)
+//                .setAutoCancel(true)
+//                .build();
+        // Create an explicit intent for an Activity in your app
+        NotificationCompat.Action action =
+                new NotificationCompat.Action.Builder(R.drawable.ic_reply_icon,
+                        getString(R.string.label), replyPendingIntent)
+                        .addRemoteInput(remoteInput)
+                        .build();
+
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+        Intent snoozeIntent = new Intent(this, MyBroadcastReceiver.class);
+        snoozeIntent.setAction(ACTION_SNOOZE);
+        snoozeIntent.putExtra(EXTRA_NOTIFICATION_ID, 0);
+        PendingIntent snoozePendingIntent =
+                PendingIntent.getBroadcast(this, 0, snoozeIntent, 0);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle("My notification")
+                .setContentText("Hello World!")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                // Set the intent that will fire when the user taps the notification
+                .setContentIntent(pendingIntent)
+                .addAction(R.drawable.ic_snooze, getString(R.string.snooze),
+                        snoozePendingIntent);
+
+        alertManager.notify(NOTIFICATION_ID, builder.build());
+    }
+
+    private void createNotificationChannel() {
+        // Create the NotificationChannel, but only on API 26+ because
+        // the NotificationChannel class is new and not in the support library
+        CharSequence name = getString(R.string.channel_name);
+        String description = getString(R.string.channel_description);
+        int importance = NotificationManager.IMPORTANCE_HIGH;
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+        channel.setDescription(description);
+        // Register the channel with the system; you can't change the importance
+        // or other notification behaviors after this
+        alertManager = getSystemService(NotificationManager.class);
+        alertManager.createNotificationChannel(channel);
     }
 
     @Override
@@ -115,6 +181,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         initView();
 
         DocumentTool.verifyStoragePermissions(MainActivity.this);
+
+        createNotificationChannel();
 
         BleManager.getInstance().init(getApplication());
         BleManager.getInstance()
@@ -129,6 +197,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .resetEndPoint("http://10.68.142.34:9000")
                 .resetBucketName("test");
 
+        // initialize folders
+        DocumentTool.addFolder(data_dir);
+        DocumentTool.addFolder(model_dir);
+
         mMotionClassifier = new MotionClassifier(this);
 
         Arrays.fill(x, 0);
@@ -141,9 +213,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 super.onPageFinished(view, url);
                 //refreshLineChart();
                 //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
-                runOnUiThread(()-> {
-                    mEnableRefresh = true;
-                });
+                mEnableRefresh = true;
             }
         });
     }
@@ -193,6 +263,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     txt_setting.setText(getString(R.string.retrieve_search_settings));
                 }
                 break;
+
+            case R.id.alert_btn_no:
+
         }
     }
 
@@ -231,7 +304,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             configureClient();
-            client.download("new_model.tflite",Environment.getExternalStorageDirectory().getPath() + "/Upload/new_model.tflite");
+            client.download("new_model.tflite",model_dir + "/new_model.tflite");
             Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
         }).start();
     }
@@ -328,10 +401,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         data_parser.receiveData(data);
                         data_parser.parseData();
                         data_parser.setCb(parsed_data -> new Thread(()-> {
-                        // Save data to file here
-                        DocumentTool.addFolder("Download/bleReceived/");
+
                         //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
-                        DocumentTool.appendFileData("Download/bleReceived/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
+                        DocumentTool.appendFileData(data_dir + "/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
 
                         // predict & show on echarts here
                         if(mCounter == LENGTH) {
@@ -351,7 +423,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         if(mEnableRefresh && x[0] != null && y[0] != null) {
                             Integer[] finalX = x;
                             Float[] finalY = y;
-                            runOnUiThread(() -> refreshLineChart(finalX, finalY));
+                            new Thread(() -> {refreshLineChart(finalX, finalY);}).start();
                         }
 
                         }).start());

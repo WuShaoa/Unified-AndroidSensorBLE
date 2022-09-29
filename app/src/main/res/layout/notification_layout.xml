@@ -12,32 +12,54 @@
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
+
         <ImageView
-            android:src="@mipmap/ic_launcher"
             android:layout_width="wrap_content"
-            android:layout_height="80dp" />
+            android:layout_height="match_parent"
+            android:src="@mipmap/ic_launcher" />
 
         <TextView
             android:id="@+id/alert_text"
             android:layout_width="361dp"
-            android:layout_height="match_parent"
-            android:text="@string/alert_notification"/>
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif"
+            android:text="@string/alert_notification"
+            android:textAlignment="center"
+            style="@style/TextAppearance.Compat.Notification.Title" />
     </LinearLayout>
+
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="70dp">
+
+        <Button
+            android:id="@+id/alert_btn_no"
+            android:layout_width="213dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentEnd="true"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginStart="-2dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
+            android:layout_marginRight="0dp"
+            android:layout_marginBottom="0dp"
+            android:layout_toEndOf="@+id/alert_btn_yes"
+            android:text="@string/alert_no" />
+
         <Button
             android:id="@+id/alert_btn_yes"
-            android:layout_toLeftOf="@+id/alert_btn_yes"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="197dp"
+            android:layout_height="match_parent"
+            android:layout_alignParentStart="true"
+            android:layout_alignParentTop="true"
+            android:layout_alignParentBottom="true"
+            android:layout_marginStart="3dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="0dp"
             android:text="@string/alert_yes"
             tools:ignore="NotSibling" />
-        <Button
-            android:layout_alignParentRight="true"
-            android:id="@+id/alert_btn_no"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/alert_no"/>
     </RelativeLayout>
+
 </LinearLayout>

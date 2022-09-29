@@ -3,13 +3,17 @@ package com.clj.blesample;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.os.Environment;
 import android.text.TextUtils;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
+
+import com.main.R;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -44,6 +48,12 @@ public class DocumentTool {
                 if (permission != PackageManager.PERMISSION_GRANTED) {
                     ActivityCompat.requestPermissions(activity, PERMISSON_STORAGE, REQUEST_STORAGE);
                 }
+            }
+            Intent intent;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                Toast.makeText(activity.getApplicationContext(), R.string.file_access, Toast.LENGTH_LONG).show();
+                intent = new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                activity.startActivity(intent); // for all file access
             }
         }catch (Exception e){
             e.printStackTrace();

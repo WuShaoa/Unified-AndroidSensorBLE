@@ -18,12 +18,13 @@ import com.clj.fastble.data.BleDevice;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.Objects;
 
 public class DeviceAdapter extends BaseAdapter {
 
     private Context context;
     private final List<BleDevice> bleDeviceList = new ArrayList<>();
-    private Hashtable<String, BleUartDataReceiver> receivers = new Hashtable<>();
+    private Hashtable<String, DeviceAttrs> receivers = new Hashtable<>();
 
     public DeviceAdapter(Context context) {
         this.context = context;
@@ -31,12 +32,12 @@ public class DeviceAdapter extends BaseAdapter {
 
     public void addDevice(BleDevice bleDevice) {
         removeDevice(bleDevice);
-        receivers.put(bleDevice.getKey(), new BleUartDataReceiver());
+        receivers.put(bleDevice.getKey(), new DeviceAttrs(bleDevice.getMac().compareToIgnoreCase("B9:AC:4A:40:0F:DF") == 0 ? Side.LEFT : Side.RIGHT));
         bleDeviceList.add(bleDevice);
     }
 
-    public BleUartDataReceiver getParser(String key){
-        return receivers.get(key);
+    public DeviceAttrs getAttrs(String key){
+        return Objects.requireNonNull(receivers.get(key));
     }
 
     public void removeDevice(BleDevice bleDevice) {
@@ -219,4 +220,17 @@ public class DeviceAdapter extends BaseAdapter {
         this.mListener = listener;
     }
 
+    public class DeviceAttrs {
+        DeviceAttrs (Side s){side = s;}
+        public int LENGTH = 50;
+        public Integer[] xAxis = new Integer[LENGTH];
+        public Float[] yAxis = new Float[LENGTH];
+        public int counter = 0;
+        public BleUartDataReceiver parser = new BleUartDataReceiver();
+        public Side side;
+    }
+    public enum Side {
+        LEFT,
+        RIGHT
+    }
 }

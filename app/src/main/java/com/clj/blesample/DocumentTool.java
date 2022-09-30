@@ -49,12 +49,12 @@ public class DocumentTool {
                     ActivityCompat.requestPermissions(activity, PERMISSON_STORAGE, REQUEST_STORAGE);
                 }
             }
-            Intent intent;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                Toast.makeText(activity.getApplicationContext(), R.string.file_access, Toast.LENGTH_LONG).show();
-                intent = new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
-                activity.startActivity(intent); // for all file access
-            }
+//            Intent intent;
+//            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+//                Toast.makeText(activity.getApplicationContext(), R.string.file_access, Toast.LENGTH_LONG).show();
+//                intent = new Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+//                activity.startActivity(intent); // for all file access
+//            }
         }catch (Exception e){
             e.printStackTrace();
         }

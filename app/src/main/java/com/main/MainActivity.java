@@ -73,6 +73,7 @@ import com.minio.minio_android.MinioUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.channels.Channel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -97,18 +98,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Switch sw_auto;
     private ImageView img_loading;
 
-    RemoteViews notificationLayout = new RemoteViews(getPackageName(), R.layout.notification_layout);
     NotificationManager alertManager;
 
     private MinioUtils client = new MinioUtils();
     private MotionClassifier mMotionClassifier;
 
     private static final int LENGTH = 50; //length of data shown
-    private EchartView mLineChart;
-    boolean mEnableRefresh = false;
-    int mCounter = 0; //counting predicted outputs
-    Integer[] x = new Integer[LENGTH];
-    Float[] y = new Float[LENGTH];
+    private EchartView mLineChartLeft;
+    private EchartView mLineChartRight;
+    boolean mEnableRefreshLeft = false;
+    boolean mEnableRefreshRight = false;
 
     private final String data_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
     private String model_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/models";
@@ -123,41 +122,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     // Alert notification settings
     private void emitAlert(){
 
-//        Notification alertNotification = new NotificationCompat.Builder(this, CHANNEL_ID)
-//                .setSmallIcon(R.mipmap.ic_launcher)
-//                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
-//                .setCustomContentView(notificationLayout)
-//                .setCustomBigContentView(notificationLayout)
-//                .setAutoCancel(true)
-//                .build();
-        // Create an explicit intent for an Activity in your app
-        NotificationCompat.Action action =
-                new NotificationCompat.Action.Builder(R.drawable.ic_reply_icon,
-                        getString(R.string.label), replyPendingIntent)
-                        .addRemoteInput(remoteInput)
-                        .build();
+        RemoteViews alertView = new RemoteViews(getPackageName(), R.layout.notification_layout);//远程视图
 
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, intent, 0);
+        Intent mainIntent = new Intent(this, MainActivity.class);
+        Intent callIntent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + "10086"));
 
-        Intent snoozeIntent = new Intent(this, MyBroadcastReceiver.class);
-        snoozeIntent.setAction(ACTION_SNOOZE);
-        snoozeIntent.putExtra(EXTRA_NOTIFICATION_ID, 0);
-        PendingIntent snoozePendingIntent =
-                PendingIntent.getBroadcast(this, 0, snoozeIntent, 0);
+        PendingIntent pending_intent_no  = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_MUTABLE);
+        PendingIntent pending_intent_yes = PendingIntent.getService(this, 0, callIntent, PendingIntent.FLAG_MUTABLE);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
+        alertView.setOnClickPendingIntent(R.id.alert_btn_no, pending_intent_no);
+        alertView.setOnClickPendingIntent(R.id.alert_btn_yes, pending_intent_yes);
+
+        NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("My notification")
-                .setContentText("Hello World!")
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-                // Set the intent that will fire when the user taps the notification
-                .setContentIntent(pendingIntent)
-                .addAction(R.drawable.ic_snooze, getString(R.string.snooze),
-                        snoozePendingIntent);
-
-        alertManager.notify(NOTIFICATION_ID, builder.build());
+                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
+                .setCustomContentView(alertView)
+                .setContentIntent(pending_intent_no);
+//                .setAutoCancel(true)
+        alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
     }
 
     private void createNotificationChannel() {
@@ -170,8 +152,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         channel.setDescription(description);
         // Register the channel with the system; you can't change the importance
         // or other notification behaviors after this
-        alertManager = getSystemService(NotificationManager.class);
+        alertManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
         alertManager.createNotificationChannel(channel);
+
     }
 
     @Override
@@ -181,8 +164,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         initView();
 
         DocumentTool.verifyStoragePermissions(MainActivity.this);
-
-        createNotificationChannel();
 
         BleManager.getInstance().init(getApplication());
         BleManager.getInstance()
@@ -203,30 +184,41 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         mMotionClassifier = new MotionClassifier(this);
 
-        Arrays.fill(x, 0);
-        Arrays.fill(y,0f);
+        mLineChartLeft = findViewById(R.id.data_chart1);
+        mLineChartRight = findViewById(R.id.data_chart2);
 
-        mLineChart = findViewById(R.id.data_chart);
-        mLineChart.setWebViewClient(new WebViewClient() {
+        mLineChartLeft.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 //refreshLineChart();
                 //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
-                mEnableRefresh = true;
+                mEnableRefreshLeft = true;
             }
         });
+        mLineChartRight.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                //refreshLineChart();
+                //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
+                mEnableRefreshRight = true;
+            }
+        });
+
+        createNotificationChannel();
+        emitAlert();
     }
 
-    private void refreshLineChart(Object[] x, Object[] y){
-//        Object[] x = new Object[]{
-//                "1", "2", "3", "4", "5", "6", "7"
-//        };
-//        Object[] y = new Object[]{
-//                820, 932, 901, 934, 1290, 1330, 1320
-//        };
-        if(mEnableRefresh){
-            mLineChart.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
+    private void refreshLineChartLeft(Object[] x, Object[] y){
+        if(mEnableRefreshLeft){
+            mLineChartLeft.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
+        }
+    }
+
+    private void refreshLineChartRight(Object[] x, Object[] y){
+        if(mEnableRefreshRight){
+            mLineChartRight.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
         }
     }
 
@@ -397,42 +389,43 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     @Override
                     public void onCharacteristicChanged(byte[] data) {
                         // Parsing data here
-                        BleUartDataReceiver data_parser = mDeviceAdapter.getParser(bleDevice.getKey());
+                        DeviceAdapter.DeviceAttrs devAttr = mDeviceAdapter.getAttrs(bleDevice.getKey());
+                        BleUartDataReceiver data_parser = devAttr.parser;
                         data_parser.receiveData(data);
                         data_parser.parseData();
-                        data_parser.setCb(parsed_data -> new Thread(()-> {
+                        data_parser.setCb(parsed_data -> {
+                            //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
+                            DocumentTool.appendFileData(data_dir + "/" + bleDevice.getMac().replace(':', '_') + ".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
 
-                        //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
-                        DocumentTool.appendFileData(data_dir + "/" + bleDevice.getMac().replace(':', '_')+".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
+                            // predict & show on echarts here
+                            float[] predictData = parsed_data.toFloatList();
+                            //TODO: input size?
+                            float predictResult = mMotionClassifier.classifyMotion(predictData)[0];
 
-                        // predict & show on echarts here
-                        if(mCounter == LENGTH) {
-                            x = Arrays.copyOfRange(x, 1, LENGTH);
-                            x = Arrays.copyOf(x, LENGTH);
-                            x[LENGTH - 1] = parsed_data.timeStamp;
+                            if (devAttr.counter == LENGTH) {
+                                devAttr.xAxis = Arrays.copyOfRange(devAttr.xAxis, 1, LENGTH + 1);
+                                devAttr.xAxis[LENGTH - 1] = parsed_data.timeStamp;
 
-                            y = Arrays.copyOfRange(y, 1, LENGTH);
-                            y = Arrays.copyOf(y, LENGTH);
-                            y[LENGTH - 1] = mMotionClassifier.classifyMotion(parsed_data.toFloatList())[0];//data.press_ao
-                        } else {
-                            x[mCounter] = parsed_data.timeStamp;
-                            y[mCounter] = mMotionClassifier.classifyMotion(parsed_data.toFloatList())[0]; //TODO: buffer & classify
-                            mCounter++;
-                        }
+                                devAttr.yAxis = Arrays.copyOfRange(devAttr.yAxis, 1, LENGTH + 1);
+                                devAttr.yAxis[LENGTH - 1] = predictResult;//data.press_ao
 
-                        if(mEnableRefresh && x[0] != null && y[0] != null) {
-                            Integer[] finalX = x;
-                            Float[] finalY = y;
-                            new Thread(() -> {refreshLineChart(finalX, finalY);}).start();
-                        }
-
-                        }).start());
+                                devAttr.counter = 0;
+                            } else {
+                                devAttr.xAxis[devAttr.counter] = parsed_data.timeStamp;
+                                devAttr.yAxis[devAttr.counter] = predictResult; //TODO: buffer & classify
+                                devAttr.counter++;
+                            }
+                            Log.d(TAG, devAttr.side == DeviceAdapter.Side.LEFT ? "LEFT" : "RIGHT");
+                            Log.d(TAG, String.valueOf(devAttr.xAxis));
+                            if (devAttr.side == DeviceAdapter.Side.LEFT) {
+                                refreshLineChartLeft(devAttr.xAxis, devAttr.yAxis);
+                            } else {
+                                refreshLineChartRight(devAttr.xAxis, devAttr.yAxis);
+                            }
+                        });
                     }
                 });
-
             }
-
-
         });
         ListView listView_device = (ListView) findViewById(R.id.list_device);
         listView_device.setAdapter(mDeviceAdapter);
@@ -623,7 +616,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         List<String> permissions = new ArrayList<>(Arrays.asList(
                 Manifest.permission.READ_EXTERNAL_STORAGE,
-                Manifest.permission.WRITE_EXTERNAL_STORAGE));
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.CALL_PHONE));
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN);    //this permission is only for API >= S (31)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);

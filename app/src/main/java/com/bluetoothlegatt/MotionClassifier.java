@@ -30,7 +30,7 @@ public class MotionClassifier {
     /** Dimensions of inputs. */
     private static final int DIM_BATCH_SIZE = 1;
 
-    private static final int DIM_DATA_SIZE = 18;
+    public static final int DIM_DATA_SIZE = 18;
 
     /** Labels corresponding to the output of the vision model. */
     private List<String> labelList = Arrays.asList("Falling", "Other");

@@ -113,7 +113,7 @@ public class BleUartDataReceiver {
             return temp;
         }
 
-        public float[] toFloatList(){//TODO: uniform
+        public float[] toFloatList(){//TODO: uniform?
             float[] attitude = uniform(new float[]{attitude_roll, attitude_pitch, attitude_yaw});
             float[] acc = uniform(new float[]{acc_x, acc_y, acc_z});
             float[] gyro = uniform(new float[]{gyro_x, gyro_y, gyro_z});

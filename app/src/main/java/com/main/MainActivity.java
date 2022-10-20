@@ -20,6 +20,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
@@ -79,7 +82,12 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
@@ -103,14 +111,48 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private MinioUtils client = new MinioUtils();
     private MotionClassifier mMotionClassifier;
 
-    private static final int LENGTH = 50; //length of data shown
     private EchartView mLineChartLeft;
     private EchartView mLineChartRight;
     boolean mEnableRefreshLeft = false;
     boolean mEnableRefreshRight = false;
 
-    private final String data_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/bleReceived";
-    private String model_dir = Environment.getExternalStorageDirectory().getPath() + "/Download/models";
+    private final static String data_dir = "/Download/bleReceived";
+    private final static String model_dir = "/Download/models";
+    private final static String model_name = "new-model.tflite";
+
+    ExecutorService dataPipeline;
+    ExecutorService downloadPool;
+    ExecutorService uploadPool;
+    RunnableFactory threadFactory = new RunnableFactory();
+    Handler handler = new Handler(Looper.getMainLooper()){
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            ArrayList<Object> xyAxis;
+            super.handleMessage(msg);
+            switch (msg.what) {
+                case 0: // 0-left-data-ok
+                    xyAxis = (ArrayList<Object>) msg.obj;
+                    if(((Float[]) xyAxis.get(1))[0] > 0.5) {
+                        emitAlert();
+                    }
+                    refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                    break;
+                case 1: // 1-right-data-ok
+                    xyAxis = (ArrayList<Object>) msg.obj;
+                    if(((Float[]) xyAxis.get(1))[0] > 0.5) {
+                        emitAlert();
+                    }
+                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                    break;
+                case 2: // 2-upload-ok
+                    Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
+                    break;
+                case 3: // 3-download-ok
+                    Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
+                    break;
+            }
+        }
+    };
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
@@ -206,8 +248,19 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
 
+        //数据处理管线，串行执行所有的tasks
+        dataPipeline = new ThreadPoolExecutor(1, 2,
+                0L, TimeUnit.MILLISECONDS,
+                            new LinkedBlockingQueue<Runnable>());
+        uploadPool = new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>());
+        downloadPool = new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>());
+
         createNotificationChannel();
-        emitAlert();
+        //emitAlert();//发送告警通知
     }
 
     private void refreshLineChartLeft(Object[] x, Object[] y){
@@ -239,6 +292,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.btn_scan:
+                DocumentTool.verifyStoragePermissions(MainActivity.this);
                 if (btn_scan.getText().equals(getString(R.string.start_scan))) {
                     checkPermissions();
                 } else if (btn_scan.getText().equals(getString(R.string.stop_scan))) {
@@ -293,28 +347,16 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void downloadModel(){
+        configureClient();
         Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            configureClient();
-            client.download("new_model.tflite",model_dir + "/new_model.tflite");
-            Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
-        }).start();
+        downloadPool.execute(threadFactory.getDownloadRunnable(model_name, model_dir, client, handler));
     }
 
     private void uploadSavedData(){
-        File dir = new File(data_dir);
-        String[] files = dir.list();
-
+        configureClient();
         Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
 
-        if (files != null)
-        for (String name : files) {
-            new Thread(() -> {
-                configureClient();
-                client.upload(Paths.get(data_dir,name).toAbsolutePath().toString(), name);
-                Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
-            }).start();
-        }
+        uploadPool.execute(threadFactory.getUploadRunnable(data_dir, client, handler));
     }
 
     private void initView() {
@@ -373,8 +415,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             @Override
             public void onReceiveClicked(final BleDevice bleDevice) {
-                DocumentTool.verifyStoragePermissions(MainActivity.this);
-
                 BleManager.getInstance().notify(bleDevice, GattAttributes.BLE_UART_SERVICE, GattAttributes.BLE_UART_TX, new BleNotifyCallback() {
                     @Override
                     public void onNotifySuccess() {
@@ -389,40 +429,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     @Override
                     public void onCharacteristicChanged(byte[] data) {
                         // Parsing data here
-                        DeviceAdapter.DeviceAttrs devAttr = mDeviceAdapter.getAttrs(bleDevice.getKey());
-                        BleUartDataReceiver data_parser = devAttr.parser;
-                        data_parser.receiveData(data);
-                        data_parser.parseData();
-                        data_parser.setCb(parsed_data -> {
-                            //DocumentTool.addFile(bleDevice.getMac().replace(':', '_')+".txt");
-                            DocumentTool.appendFileData(data_dir + "/" + bleDevice.getMac().replace(':', '_') + ".txt", parsed_data.toString().getBytes(StandardCharsets.UTF_8));
+                        dataPipeline.execute(threadFactory.getDataPipelineRunnable(mDeviceAdapter,
+                                bleDevice,
+                                data,
+                                data_dir,
+                                mMotionClassifier,
+                                handler));
 
-                            // predict & show on echarts here
-                            float[] predictData = parsed_data.toFloatList();
-                            //TODO: input size?
-                            float predictResult = mMotionClassifier.classifyMotion(predictData)[0];
-
-                            if (devAttr.counter == LENGTH) {
-                                devAttr.xAxis = Arrays.copyOfRange(devAttr.xAxis, 1, LENGTH + 1);
-                                devAttr.xAxis[LENGTH - 1] = parsed_data.timeStamp;
-
-                                devAttr.yAxis = Arrays.copyOfRange(devAttr.yAxis, 1, LENGTH + 1);
-                                devAttr.yAxis[LENGTH - 1] = predictResult;//data.press_ao
-
-                                devAttr.counter = 0;
-                            } else {
-                                devAttr.xAxis[devAttr.counter] = parsed_data.timeStamp;
-                                devAttr.yAxis[devAttr.counter] = predictResult; //TODO: buffer & classify
-                                devAttr.counter++;
-                            }
-                            Log.d(TAG, devAttr.side == DeviceAdapter.Side.LEFT ? "LEFT" : "RIGHT");
-                            Log.d(TAG, String.valueOf(devAttr.xAxis));
-                            if (devAttr.side == DeviceAdapter.Side.LEFT) {
-                                refreshLineChartLeft(devAttr.xAxis, devAttr.yAxis);
-                            } else {
-                                refreshLineChartRight(devAttr.xAxis, devAttr.yAxis);
-                            }
-                        });
                     }
                 });
             }

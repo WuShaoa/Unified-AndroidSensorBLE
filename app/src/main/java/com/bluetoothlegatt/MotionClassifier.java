@@ -15,8 +15,7 @@ import java.io.IOException;
 import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 import java.util.List;
-
-@RequiresApi(api = Build.VERSION_CODES.N)
+//TODO: THIS CLASS NEEDS MORE MODIFICATION, AFTER REAL UNDERSTAND OF THE DEEP-LEARNING MODEL...
 public class MotionClassifier {
     // Display preferences
     public static final float GOOD_PROB_THRESHOLD = 0.5f;
@@ -65,8 +64,9 @@ public class MotionClassifier {
         Log.d(TAG, "Created a MotionClassifier.");
     }
 
-    /** Classifies a frame from the preview stream. */
-    public void classifyMotion(float[] input, MotionClassifierCallBack callback) {
+    /** Classifies a frame from the preview stream.
+     * flag: 0-left 1-right */
+    public void classifyMotion(float[] input, int flag, MotionClassifierCallBack callback) {
         //printTopKLabels(builder);
 
         if (tflite == null) {

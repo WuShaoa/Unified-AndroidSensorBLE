@@ -37,7 +37,7 @@ public class DeviceAdapter extends BaseAdapter {
     }
 
     public DeviceAttrs getAttrs(String key){
-        return Objects.requireNonNull(receivers.get(key));
+        return receivers.get(key);
     }
 
     public void removeDevice(BleDevice bleDevice) {

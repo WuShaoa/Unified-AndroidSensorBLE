@@ -27,9 +27,9 @@ public class MinioUtils {
     private static final String TAG = MinioUtils.class.getSimpleName();
 
     private String BUCKET_NAME = "test";
-    private String END_POINT = "http://192.168.10.40:9000";
-    private String ACCOUNT = "huang";
-    private String SECRET_KEY = "asdfghj999";
+    private String END_POINT = "http://10.68.142.34:9000";
+    private String ACCOUNT = "minioadmin";
+    private String SECRET_KEY = "minioadmin123";
 
     public MinioUtils() {}
 

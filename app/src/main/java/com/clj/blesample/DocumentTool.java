@@ -61,7 +61,7 @@ public class DocumentTool {
     }
 
     /**【检查文件目录是否存在，不存在就创建新的目录】**/
-    public static void checkFilePath(File file ,boolean isDir){
+    public synchronized static void checkFilePath(File file ,boolean isDir){
         if(file!=null){
             if(!isDir){     //如果是文件就返回父目录
                 file = file.getParentFile();
@@ -73,7 +73,7 @@ public class DocumentTool {
     }
 
     /**【创建一个新的文件夹】**/
-    public static void addFolder(String folderName){
+    public synchronized static void addFolder(String folderName){
         try {
             if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
                 File sdCard = Environment.getExternalStorageDirectory();
@@ -90,7 +90,7 @@ public class DocumentTool {
     }
 
     /**【创建文件】**/
-    public static void addFile(String fileName){
+    public synchronized static void addFile(String fileName){
         if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
             try {
                 File sdCard = Environment.getExternalStorageDirectory();
@@ -108,7 +108,7 @@ public class DocumentTool {
     }
 
     /**【删除文件】**/
-    public static void deleteFile(File file){
+    public synchronized static void deleteFile(File file){
         if(file.exists()){                          //判断文件是否存在
             if(file.isFile()){                      //判断是否是文件
                 boolean isSucess = file.delete();
@@ -125,7 +125,7 @@ public class DocumentTool {
     }
 
     /**【重写数据到文件】**/
-    public static void writeData(String path , String fileData){
+    public synchronized static void writeData(String path , String fileData){
         try {
             if(Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)){
                 File file = new File(path);
@@ -190,13 +190,13 @@ public class DocumentTool {
     }
 
     /**【判断文件是否存在】**/
-    public static boolean isFileExists(String fileName){
+    public synchronized static boolean isFileExists(String fileName){
         File file = new File(fileName);
         return file.exists();
     }
 
     /**【判断文件夹是否存在】**/
-    public static boolean isFolderExists(String directoryPath){
+    public synchronized static boolean isFolderExists(String directoryPath){
         if(TextUtils.isEmpty(directoryPath)){
             return false;
         }
@@ -205,7 +205,7 @@ public class DocumentTool {
     }
 
     /**【获取文件夹名称】**/
-    public static String getFolderName(String folderName){
+    public synchronized static String getFolderName(String folderName){
         if(TextUtils.isEmpty(folderName)){
             return folderName;
         }
@@ -214,7 +214,7 @@ public class DocumentTool {
     }
 
     /**【重命名文件】**/
-    public static boolean renameFile(String oldFileName , String newFileName){
+    public synchronized static boolean renameFile(String oldFileName , String newFileName){
         File oldName = new File(oldFileName);
         File newName = new File(newFileName);
         return oldName.renameTo(newName);
@@ -233,7 +233,7 @@ public class DocumentTool {
     }
 
     /**【复制文件】参数为：String **/
-    public static int copyFile(String fromFile , String toFile){
+    public synchronized static int copyFile(String fromFile , String toFile){
         try {
             InputStream fosfrom = new FileInputStream(fromFile);
             OutputStream outto = new FileOutputStream(toFile);

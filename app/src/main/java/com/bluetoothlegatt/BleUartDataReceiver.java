@@ -3,6 +3,8 @@ package com.bluetoothlegatt;
 import android.annotation.SuppressLint;
 import android.util.Log;
 
+import androidx.annotation.NonNull;
+
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -38,17 +40,21 @@ public class BleUartDataReceiver {
         if(!lines_buffer.isEmpty()){
             String l;
             BleUartData parsedData = new BleUartData();
-            l = new String(lines_buffer.poll());
-            String[] words = l.split(" +"); //split by spaces
-            parsedData.fromStringArray(words);
-            Log.i(TAG, "data parsed.");
-            if(cb != null)
-                cb.onBleUartDataReceived(parsedData); //callback
+            StringBuffer lb = lines_buffer.poll();
+            if(lb != null) {
+                l = new String(lb);
+
+                String[] words = l.split(" +"); //split by spaces
+                parsedData.fromStringArray(words);
+                Log.i(TAG, "data parsed.");
+                if (cb != null)
+                    cb.onBleUartDataReceived(parsedData); //callback
+            }
         }
     }
 
     public static class BleUartData {
-        public int timeStamp;
+        //public int timeStamp;
         public float value_ao, voltage_ao, press_ao; //压力
         public float attitude_roll, attitude_pitch, attitude_yaw; //欧拉角
         public float acc_x, acc_y, acc_z; //加速度
@@ -57,7 +63,7 @@ public class BleUartDataReceiver {
         private boolean isInit = true;
 
         public BleUartData(){
-            timeStamp = 0;
+            //timeStamp = 0;
             value_ao = 0;
             voltage_ao = 0;
             press_ao = 0; //压力
@@ -76,7 +82,7 @@ public class BleUartDataReceiver {
         public void fromStringArray(String[] data){
             try {
                 isInit = false;
-                timeStamp = Integer.parseInt(data[0]);
+                //timeStamp = Integer.parseInt(data[0]);
                 value_ao = Float.parseFloat(data[1]);
                 voltage_ao = Float.parseFloat(data[2]);
                 press_ao = Float.parseFloat(data[3]); //压力
@@ -125,9 +131,10 @@ public class BleUartDataReceiver {
             return "timeStamp,value_ao,voltage_ao,press_ao,attitude_roll,attitude_pitch,attitude_yaw,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z";
         }
 
+        @NonNull
         @SuppressLint("DefaultLocale")
         public String toString(){
-            return String.format("%d, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f",timeStamp,value_ao,voltage_ao,press_ao,attitude_roll,attitude_pitch,attitude_yaw,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z);
+            return String.format("%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f",value_ao,voltage_ao,press_ao,attitude_roll,attitude_pitch,attitude_yaw,acc_x,acc_y,acc_z,gyro_x,gyro_y,gyro_z);
         }
 
         public boolean isParsed(){

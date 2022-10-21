@@ -18,7 +18,7 @@ import java.util.List;
 //TODO: THIS CLASS NEEDS MORE MODIFICATION, AFTER REAL UNDERSTAND OF THE DEEP-LEARNING MODEL...
 public class MotionClassifier {
     // Display preferences
-    public static final float GOOD_PROB_THRESHOLD = 0.5f;
+    public static final float PROB_THRESHOLD = 0.5f;
 
     /** Tag for the {@link Log}. */
     private static final String TAG = "MotionClassifier";

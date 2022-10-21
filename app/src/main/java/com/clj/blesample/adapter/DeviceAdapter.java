@@ -22,9 +22,10 @@ import java.util.Objects;
 
 public class DeviceAdapter extends BaseAdapter {
 
-    private Context context;
+    private final Context context;
     private final List<BleDevice> bleDeviceList = new ArrayList<>();
-    private Hashtable<String, DeviceAttrs> receivers = new Hashtable<>();
+    private final Hashtable<String, DeviceAttrs> receivers = new Hashtable<>();
+    private final static String RIGHT_DEV_MAC = "B9:AC:4A:40:0F:DF";
 
     public DeviceAdapter(Context context) {
         this.context = context;
@@ -32,7 +33,7 @@ public class DeviceAdapter extends BaseAdapter {
 
     public void addDevice(BleDevice bleDevice) {
         removeDevice(bleDevice);
-        receivers.put(bleDevice.getKey(), new DeviceAttrs(bleDevice.getMac().compareToIgnoreCase("B9:AC:4A:40:0F:DF") == 0 ? Side.LEFT : Side.RIGHT));
+        receivers.put(bleDevice.getKey(), new DeviceAttrs(bleDevice.getMac().compareToIgnoreCase(RIGHT_DEV_MAC) == 0 ? Side.RIGHT : Side.LEFT));
         bleDeviceList.add(bleDevice);
     }
 
@@ -150,39 +151,27 @@ public class DeviceAdapter extends BaseAdapter {
 //           }
         }
 
-        holder.btn_receive.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mListener != null) {
-                    mListener.onReceiveClicked(bleDevice);
-                }
+        holder.btn_receive.setOnClickListener(view -> {
+            if (mListener != null) {
+                mListener.onReceiveClicked(bleDevice);
             }
         });
 
-        holder.btn_connect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mListener != null) {
-                    mListener.onConnect(bleDevice);
-                }
+        holder.btn_connect.setOnClickListener(view -> {
+            if (mListener != null) {
+                mListener.onConnect(bleDevice);
             }
         });
 
-        holder.btn_disconnect.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mListener != null) {
-                    mListener.onDisConnect(bleDevice);
-                }
+        holder.btn_disconnect.setOnClickListener(view -> {
+            if (mListener != null) {
+                mListener.onDisConnect(bleDevice);
             }
         });
 
-        holder.btn_detail.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if (mListener != null) {
-                    mListener.onDetail(bleDevice);
-                }
+        holder.btn_detail.setOnClickListener(view -> {
+            if (mListener != null) {
+                mListener.onDetail(bleDevice);
             }
         });
 
@@ -220,7 +209,7 @@ public class DeviceAdapter extends BaseAdapter {
         this.mListener = listener;
     }
 
-    public class DeviceAttrs {
+    public static class DeviceAttrs {
         DeviceAttrs (Side s){side = s;}
         public int LENGTH = 50;
         public Integer[] xAxis = new Integer[LENGTH];

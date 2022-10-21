@@ -116,6 +116,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     boolean mEnableRefreshLeft = false;
     boolean mEnableRefreshRight = false;
 
+    private final static String emergency_num = "10086";
     private final static String data_dir = "/Download/bleReceived";
     private final static String model_dir = "/Download/models";
     private final static String model_name = "new-model.tflite";
@@ -131,18 +132,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             super.handleMessage(msg);
             switch (msg.what) {
                 case 0: // 0-left-data-ok
-                    xyAxis = (ArrayList<Object>) msg.obj;
-                    if(((Float[]) xyAxis.get(1))[0] > 0.5) {
-                        emitAlert();
-                    }
-                    refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                    Log.d(TAG, "0-left-data-ok");
                     break;
                 case 1: // 1-right-data-ok
-                    xyAxis = (ArrayList<Object>) msg.obj;
-                    if(((Float[]) xyAxis.get(1))[0] > 0.5) {
-                        emitAlert();
-                    }
-                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                    Log.d(TAG, "1-right-data-ok");
+//                    xyAxis = (ArrayList<Object>) msg.obj;
+//                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
+//                        emitAlert();
+//                    }
+//                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
                     break;
                 case 2: // 2-upload-ok
                     Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
@@ -150,6 +148,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 case 3: // 3-download-ok
                     Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
                     break;
+                case 4: // 4-model-predicted
+                    xyAxis = (ArrayList<Object>) msg.obj;
+                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
+                        emitAlert();
+                    }
+                    refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
             }
         }
     };
@@ -167,10 +172,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         RemoteViews alertView = new RemoteViews(getPackageName(), R.layout.notification_layout);//远程视图
 
         Intent mainIntent = new Intent(this, MainActivity.class);
-        Intent callIntent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:" + "10086"));
+        Intent callIntent = new Intent(Intent.ACTION_CALL);
+        callIntent.setData(Uri.parse("tel:" + emergency_num));
 
-        PendingIntent pending_intent_no  = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_MUTABLE);
-        PendingIntent pending_intent_yes = PendingIntent.getService(this, 0, callIntent, PendingIntent.FLAG_MUTABLE);
+        PendingIntent pending_intent_no;
+        PendingIntent pending_intent_yes;
+
+        pending_intent_no = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_MUTABLE);
+        pending_intent_yes = PendingIntent.getActivity(this, 1, callIntent, PendingIntent.FLAG_MUTABLE);
+
 
         alertView.setOnClickPendingIntent(R.id.alert_btn_no, pending_intent_no);
         alertView.setOnClickPendingIntent(R.id.alert_btn_yes, pending_intent_yes);
@@ -178,10 +188,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
-                .setCustomContentView(alertView)
-                .setContentIntent(pending_intent_no);
+                .setCustomContentView(alertView);
+                //.setContentIntent(pending_intent_no);
 //                .setAutoCancel(true)
         alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
+        onPause();
     }
 
     private void createNotificationChannel() {
@@ -260,7 +271,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 new LinkedBlockingQueue<Runnable>());
 
         createNotificationChannel();
-        //emitAlert();//发送告警通知
+        emitAlert();//发送告警通知
     }
 
     private void refreshLineChartLeft(Object[] x, Object[] y){
@@ -275,10 +286,53 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    private void setHandler(){
+        handler = new Handler(Looper.getMainLooper()){
+            @Override
+            public void handleMessage(@NonNull Message msg) {
+                ArrayList<Object> xyAxis;
+                super.handleMessage(msg);
+                switch (msg.what) {
+                    case 0: // 0-left-data-ok
+                        Log.d(TAG, "0-left-data-ok");
+                        break;
+                    case 1: // 1-right-data-ok
+                        Log.d(TAG, "1-right-data-ok");
+//                    xyAxis = (ArrayList<Object>) msg.obj;
+//                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
+//                        emitAlert();
+//                    }
+//                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                        break;
+                    case 2: // 2-upload-ok
+                        Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
+                        break;
+                    case 3: // 3-download-ok
+                        Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
+                        break;
+                    case 4: // 4-model-predicted
+                        xyAxis = (ArrayList<Object>) msg.obj;
+                        if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
+                            emitAlert();
+                        }
+                        refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                        refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
+                }
+            }
+        };
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        handler = null;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
         showConnectedDevice();
+        setHandler();
     }
 
     @Override
@@ -632,8 +686,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 Manifest.permission.WRITE_EXTERNAL_STORAGE,
                 Manifest.permission.CALL_PHONE));
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN);    //this permission is only for API >= S (31)
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN);    //these permissions are only for API >= S (31)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
+            permissions.add(Manifest.permission.MANAGE_EXTERNAL_STORAGE);
         } else { permissions.add(Manifest.permission.ACCESS_FINE_LOCATION); }
 
         List<String> permissionDeniedList = new ArrayList<>();
@@ -658,19 +713,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         .setTitle(R.string.notifyTitle)
                         .setMessage(R.string.gpsNotifyMsg)
                         .setNegativeButton(R.string.cancel,
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        finish();
-                                    }
-                                })
+                                (dialog, which) -> finish())
                         .setPositiveButton(R.string.setting,
-                                new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                                        startActivityForResult(intent, REQUEST_CODE_OPEN_GPS);
-                                    }
+                                (dialog, which) -> {
+                                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                                    startActivityForResult(intent, REQUEST_CODE_OPEN_GPS);
                                 })
 
                         .setCancelable(false)

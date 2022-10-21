@@ -60,7 +60,7 @@ public class BleUartDataReceiver {
         public float acc_x, acc_y, acc_z; //加速度
         public float gyro_x, gyro_y, gyro_z; //角速度
         public final static int COUNT = 13;
-        private boolean isInit = true;
+        private boolean isInit;
 
         public BleUartData(){
             //timeStamp = 0;
@@ -119,12 +119,20 @@ public class BleUartDataReceiver {
             return temp;
         }
 
-        public float[] toFloatList(){//TODO: uniform?
-            float[] attitude = uniform(new float[]{attitude_roll, attitude_pitch, attitude_yaw});
-            float[] acc = uniform(new float[]{acc_x, acc_y, acc_z});
-            float[] gyro = uniform(new float[]{gyro_x, gyro_y, gyro_z});
+        public float[] toFloatList(Boolean isUniform){//TODO: is it necessary or correct to do uniform?
+            //keep the unit and value correct is important, then we shouldn't do 'uniform'.
+            //what we need to do is make sure the units of data are invariant.
+            float[] fsr = isUniform? uniform(new float[]{value_ao,voltage_ao,press_ao})
+                    : new float[]{value_ao,voltage_ao,press_ao};
+            float[] attitude = isUniform? uniform(new float[]{attitude_roll, attitude_pitch, attitude_yaw})
+                    :new float[]{attitude_roll, attitude_pitch, attitude_yaw};
+            float[] acc = isUniform? uniform(new float[]{acc_x, acc_y, acc_z})
+                    :new float[]{acc_x, acc_y, acc_z};
+            float[] gyro = isUniform? uniform(new float[]{gyro_x, gyro_y, gyro_z})
+                    :new float[]{gyro_x, gyro_y, gyro_z};
 
-            return new float[]{0,0,0,attitude[0], attitude[1], attitude[2], acc[0], acc[1], acc[2], gyro[0], gyro[1], gyro[2]};
+            //here needs a contrast of model input (half)
+            return new float[]{fsr[0],fsr[1],fsr[2],attitude[0], attitude[1], attitude[2], acc[0], acc[1], acc[2], gyro[0], gyro[1], gyro[2]};
         }
 
         public static String getColumns(){

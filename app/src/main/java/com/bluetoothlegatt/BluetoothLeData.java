@@ -4,7 +4,7 @@ import android.os.Parcel;
 import android.os.Parcelable;
 
 
-public class BluetoothLeData implements Parcelable{
+public class  BluetoothLeData implements Parcelable{
     private String mAddress;
     private String mData;
 

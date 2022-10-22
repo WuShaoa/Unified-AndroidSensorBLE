@@ -1,6 +1,5 @@
 package com.main;
 
-import android.os.FileUtils;
 import android.os.Handler;
 import android.os.Message;
 import android.util.Log;
@@ -24,9 +23,12 @@ public class RunnableFactory {
     private static final int LENGTH = 50; //length of data shown
     private int leftCount = 0;
     private int rightCount = 0;
+    private Integer[] predictX = new Integer[LENGTH];
+    private Float[] predictY = new Float[LENGTH];
+    private int predictCount = 0;
     private Boolean leftFlag = false;
     private Boolean rightFlag = false;
-    private Hashtable<String, float[]> lrData = new Hashtable<>();
+    private final Hashtable<String, float[]> lrData = new Hashtable<>();
 
     // message what: 0-left-data-ok 1-right-data-ok 2-upload-ok 3-download-ok 4-model-predicted
 
@@ -45,23 +47,39 @@ public class RunnableFactory {
                 BleUartDataReceiver data_parser = devAttr.parser;
                 data_parser.receiveData(data);
 
+                // continuation of successful data parsing
                 data_parser.setCb(parsed_data -> {
-                    float[] predictData = parsed_data.toFloatList(false);
-                    //TODO: input size? HOW TO MERGE LEFT and RIGHT DATA?
+                    float[] rawData = parsed_data.toFloatList(false);
+                    //TODO: input size?
                     Message dataParsed = new Message();
+
+                    devAttr.xAxis[devAttr.counter] = (devAttr.side == DeviceAdapter.Side.LEFT) ? leftCount : rightCount;
+                    devAttr.rollY[devAttr.counter] = rawData[3]; //index of the value
+                    devAttr.pitchY[devAttr.counter] = rawData[4];
+                    devAttr.yawY[devAttr.counter] = rawData[5];
+                    devAttr.counter++;
+                    devAttr.counter %= LENGTH;
+                    ArrayList<Object[]> receivedData = new ArrayList<>();
+                    receivedData.add(devAttr.xAxis);
+                    receivedData.add(devAttr.rollY);
+                    receivedData.add(devAttr.pitchY);
+                    receivedData.add(devAttr.yawY);
+                    dataParsed.obj = receivedData;
+
+                    Log.d(TAG, devAttr.side == DeviceAdapter.Side.LEFT ? "LEFT" : "RIGHT");
 
                     if (devAttr.side == DeviceAdapter.Side.LEFT) {
                         dataParsed.what = 0;
                         //leftCount = (leftCount < LENGTH) ? leftCount + 1 : 0;
                         leftCount++;
                         leftFlag = true;
-                        lrData.put("left", predictData);
+                        lrData.put("left", rawData);
                     } else {
                         dataParsed.what = 1;
                         //rightCount = (rightCount < LENGTH) ? rightCount + 1 : 0;
                         rightCount++;
                         rightFlag = true;
-                        lrData.put("right",predictData);
+                        lrData.put("right",rawData);
                     }
 
                     if(leftFlag && rightFlag){
@@ -69,35 +87,35 @@ public class RunnableFactory {
                         float[] leftInput = lrData.get("left");
                         float[] rightInput = lrData.get("right");
                         if(leftInput != null && rightInput != null) {
-                            leftInput = Arrays.copyOf(leftInput, leftInput.length + rightInput.length);
+                            int lLength = leftInput.length;
+                            leftInput = Arrays.copyOf(leftInput, lLength + rightInput.length);
                             // combing two parts of inputs to leftInput
-                            System.arraycopy(rightInput, 0, leftInput, leftInput.length, rightInput.length);
+                            System.arraycopy(rightInput, 0, leftInput, lLength, rightInput.length);
 
                             float predictResult = mMotionClassifier.classifyMotion(leftInput)[0];
 
-                            devAttr.xAxis[devAttr.counter] = (devAttr.side == DeviceAdapter.Side.LEFT) ? leftCount : rightCount;
-                            devAttr.yAxis[devAttr.counter] = predictResult; //TODO: buffer & classify
-                            devAttr.counter++;
-                            devAttr.counter %= LENGTH;
+                            predictX[predictCount % LENGTH] = predictCount;
+                            predictY[predictCount % LENGTH] = predictResult;
+                            predictCount++;
 
-                            Log.d(TAG, devAttr.side == DeviceAdapter.Side.LEFT ? "LEFT" : "RIGHT");
-                            Log.d(TAG, String.valueOf(devAttr.xAxis));
-
+                            Log.d(TAG, "data predicted");
 
                             ArrayList<Object> xyAxis = new ArrayList<>(2);
-                            xyAxis.add(devAttr.xAxis);
-                            xyAxis.add(devAttr.yAxis);
+                            xyAxis.add(predictX);
+                            xyAxis.add(predictY);
 
                             Message modelPredicted = new Message();
                             modelPredicted.what = 4;
                             modelPredicted.obj = xyAxis;
-                            //TODO: separate the LEFT/RIGHT and TRAINED message
 
-                            handler.sendMessage(modelPredicted);
+                            if(handler != null)
+                                handler.sendMessage(modelPredicted);
                         }
                     }
 
-                    handler.sendMessage(dataParsed);
+                    if(handler != null)
+                        handler.sendMessage(dataParsed); // emit message to the UI thread
+
                 });
 
                 data_parser.parseData();
@@ -119,7 +137,8 @@ public class RunnableFactory {
             }
             Message uploadOk = new Message();
             uploadOk.what = 2;
-            handler.sendMessage(uploadOk);
+            if(handler != null)
+                handler.sendMessage(uploadOk);
         };
     }
 
@@ -130,7 +149,8 @@ public class RunnableFactory {
             client.download(name,modelDir + "/" + name);
             Message downloadOk = new Message();
             downloadOk.what = 3;
-            handler.sendMessage(downloadOk);
+            if(handler != null)
+                handler.sendMessage(downloadOk);
         };
     }
 }

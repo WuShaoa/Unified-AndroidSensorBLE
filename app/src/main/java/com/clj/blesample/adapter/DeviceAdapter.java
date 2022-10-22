@@ -213,7 +213,9 @@ public class DeviceAdapter extends BaseAdapter {
         DeviceAttrs (Side s){side = s;}
         public int LENGTH = 50;
         public Integer[] xAxis = new Integer[LENGTH];
-        public Float[] yAxis = new Float[LENGTH];
+        public Float[] rollY = new Float[LENGTH];
+        public Float[] pitchY = new Float[LENGTH];
+        public Float[] yawY = new Float[LENGTH];
         public int counter = 0;
         public BleUartDataReceiver parser = new BleUartDataReceiver();
         public Side side;

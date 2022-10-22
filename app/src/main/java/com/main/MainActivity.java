@@ -71,6 +71,7 @@ import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.exception.BleException;
 import com.clj.fastble.scan.BleScanRuleConfig;
 
+import com.github.abel533.echarts.json.GsonOption;
 import com.main.operation.OperationActivity;
 import com.minio.minio_android.MinioUtils;
 
@@ -124,40 +125,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     ExecutorService dataPipeline;
     ExecutorService downloadPool;
     ExecutorService uploadPool;
+    ExecutorService refreshEchartsPool;
     RunnableFactory threadFactory = new RunnableFactory();
-    Handler handler = new Handler(Looper.getMainLooper()){
-        @Override
-        public void handleMessage(@NonNull Message msg) {
-            ArrayList<Object> xyAxis;
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case 0: // 0-left-data-ok
-                    Log.d(TAG, "0-left-data-ok");
-                    break;
-                case 1: // 1-right-data-ok
-                    Log.d(TAG, "1-right-data-ok");
-//                    xyAxis = (ArrayList<Object>) msg.obj;
-//                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
-//                        emitAlert();
-//                    }
-//                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
-                    break;
-                case 2: // 2-upload-ok
-                    Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
-                    break;
-                case 3: // 3-download-ok
-                    Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
-                    break;
-                case 4: // 4-model-predicted
-                    xyAxis = (ArrayList<Object>) msg.obj;
-                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
-                        emitAlert();
-                    }
-                    refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
-                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
-            }
-        }
-    };
+    Handler handler = new Handler(Looper.getMainLooper());
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
@@ -192,7 +162,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 //.setContentIntent(pending_intent_no);
 //                .setAutoCancel(true)
         alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
-        onPause();
+        //onPause();
     }
 
     private void createNotificationChannel() {
@@ -215,6 +185,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initView();
+
+        setHandler(); //Handling all messages!
 
         DocumentTool.verifyStoragePermissions(MainActivity.this);
 
@@ -243,8 +215,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         mLineChartLeft.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                //refreshLineChart();
+                super.onPageFinished(view, url);;
                 //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
                 mEnableRefreshLeft = true;
             }
@@ -253,16 +224,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
-                //refreshLineChart();
                 //最好在h5页面加载完毕后再加载数据，防止html的标签还未加载完成，不能正常显示
                 mEnableRefreshRight = true;
             }
         });
 
         //数据处理管线，串行执行所有的tasks
-        dataPipeline = new ThreadPoolExecutor(1, 2,
+        dataPipeline = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                            new LinkedBlockingQueue<Runnable>());
+                new LinkedBlockingQueue<Runnable>());
         uploadPool = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<Runnable>());
@@ -270,19 +240,28 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<Runnable>());
 
+        refreshEchartsPool = new ThreadPoolExecutor(2, 5,
+                50L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<Runnable>());
+
         createNotificationChannel();
         emitAlert();//发送告警通知
     }
 
-    private void refreshLineChartLeft(Object[] x, Object[] y){
-        if(mEnableRefreshLeft){
-            mLineChartLeft.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
+    private void refreshLineChartLeft(Object[] x, Object[] roll, Object[] pitch, Object[] yaw){
+        if(mEnableRefreshLeft) {
+            refreshEchartsPool.execute(() -> {
+                GsonOption op = EchartOptionUtil.getLineChartOptions(x, roll, pitch, yaw, "Left");
+                runOnUiThread(() -> mLineChartLeft.refreshEchartsWithOption(op));});
         }
     }
 
-    private void refreshLineChartRight(Object[] x, Object[] y){
+
+    private void refreshLineChartRight(Object[] x, Object[] roll, Object[] pitch, Object[] yaw){
         if(mEnableRefreshRight){
-            mLineChartRight.refreshEchartsWithOption(EchartOptionUtil.getLineChartOptions(x, y));
+            refreshEchartsPool.execute(() -> {
+                GsonOption op = EchartOptionUtil.getLineChartOptions(x, roll, pitch, yaw, "Right");
+                runOnUiThread(() -> mLineChartRight.refreshEchartsWithOption(op));});
         }
     }
 
@@ -294,15 +273,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 super.handleMessage(msg);
                 switch (msg.what) {
                     case 0: // 0-left-data-ok
+                        ArrayList<Object[]> receivedDataL = (ArrayList<Object[]>) msg.obj;
+                        refreshLineChartLeft(receivedDataL.get(0), receivedDataL.get(1), receivedDataL.get(2), receivedDataL.get(3));
                         Log.d(TAG, "0-left-data-ok");
                         break;
                     case 1: // 1-right-data-ok
+                        ArrayList<Object[]> receivedDataR = (ArrayList<Object[]>) msg.obj;
+                        refreshLineChartRight(receivedDataR.get(0), receivedDataR.get(1), receivedDataR.get(2), receivedDataR.get(3));
                         Log.d(TAG, "1-right-data-ok");
-//                    xyAxis = (ArrayList<Object>) msg.obj;
-//                    if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
-//                        emitAlert();
-//                    }
-//                    refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
                         break;
                     case 2: // 2-upload-ok
                         Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
@@ -312,11 +290,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         break;
                     case 4: // 4-model-predicted
                         xyAxis = (ArrayList<Object>) msg.obj;
+                        Log.d(TAG, "predict Result: " + xyAxis.get(1).toString());
                         if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
                             emitAlert();
                         }
-                        refreshLineChartLeft((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
-                        refreshLineChartRight((Object[]) xyAxis.get(0), (Object[]) xyAxis.get(1));
                 }
             }
         };
@@ -346,9 +323,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.btn_scan:
-                DocumentTool.verifyStoragePermissions(MainActivity.this);
+                //DocumentTool.verifyStoragePermissions(MainActivity.this);
                 if (btn_scan.getText().equals(getString(R.string.start_scan))) {
                     checkPermissions();
+//                    setScanRule();
+//                    startScan();
                 } else if (btn_scan.getText().equals(getString(R.string.stop_scan))) {
                     BleManager.getInstance().cancelScan();
                 }
@@ -684,12 +663,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         List<String> permissions = new ArrayList<>(Arrays.asList(
                 Manifest.permission.READ_EXTERNAL_STORAGE,
                 Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.CALL_PHONE));
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             permissions.add(Manifest.permission.BLUETOOTH_SCAN);    //these permissions are only for API >= S (31)
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT);
             permissions.add(Manifest.permission.MANAGE_EXTERNAL_STORAGE);
-        } else { permissions.add(Manifest.permission.ACCESS_FINE_LOCATION); }
+        }
 
         List<String> permissionDeniedList = new ArrayList<>();
         for (String permission : permissions) {

@@ -1,7 +1,11 @@
 package com.minio.minio_android;
 
 
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import com.minio.minio_android.errors.ErrorResponseException;
 import com.minio.minio_android.errors.InsufficientDataException;
@@ -33,6 +37,12 @@ public class MinioUtils {
 
     public MinioUtils() {}
 
+    @NonNull
+    @Override
+    public String toString() {
+        return "[B:" + BUCKET_NAME + " E:" + END_POINT + " A:" + ACCOUNT + " S:" + SECRET_KEY + "]";
+    }
+
     public MinioUtils resetEndPoint(String endPoint){
         END_POINT = endPoint;
         return this;
@@ -53,18 +63,22 @@ public class MinioUtils {
         return this;
     }
 
-    public void upload(String filepath, String objectName) {
+    public void upload(String filepath, String objectName, Handler handler) {
         try {
             // Create a minioClient
             MinioClient minioClient = new MinioClient(END_POINT,
                                                       ACCOUNT,
                                                       SECRET_KEY);
-
             minioClient.putObject(BUCKET_NAME, objectName, filepath, null, null, null, null);
             Log.d(TAG,
                     filepath + " is successfully uploaded as "
                             + "object " + objectName + " to bucket test.");
 
+            if (handler != null){
+                Message uploadSuccess = new Message();
+                uploadSuccess.what = 2;
+                handler.sendMessage(uploadSuccess);
+            }
         } catch (RuntimeException | InvalidEndpointException | InvalidPortException e) {
             Log.e(TAG, String.valueOf(e.getCause()));
             e.printStackTrace();
@@ -83,10 +97,6 @@ public class MinioUtils {
         }
     }
 
-    public void upload(String filepath, String objectName, uploadedCallback cb){
-        upload(filepath, objectName);
-        cb.onUploaded(filepath);
-    }
 
     public void download(String objectName, downloadCallback cb) {
         try {
@@ -114,10 +124,11 @@ public class MinioUtils {
         }
     }
 
-    public void download(String objectName, String to){
+    public void download(String objectName, String to, Handler handler){
         download(objectName, (is)-> {
             //创建文件的file对象
             File file = new File(to);
+            if(!file.exists()) file.createNewFile();
 
             //将数据流写进to文件
             try {
@@ -133,6 +144,13 @@ public class MinioUtils {
                 Log.d(TAG,
                         objectName + " is successfully downloaded to "
                                  + to + " .");
+
+                if(handler != null) {
+                    Message downloadSuccess = new Message();
+                    downloadSuccess.what = 3;
+                    handler.sendMessage(downloadSuccess);
+                };
+
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } finally {

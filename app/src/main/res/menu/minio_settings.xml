@@ -10,4 +10,8 @@
         android:id="@+id/minio_upload"
         android:icon="@android:drawable/arrow_up_float"
         android:title="@string/upload" />
+    <item
+        android:id="@+id/change_model"
+        android:icon="@android:drawable/arrow_up_float"
+        android:title="@string/change_model" />
 </menu>

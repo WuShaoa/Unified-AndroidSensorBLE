@@ -8,8 +8,8 @@
 
     <string name="start_scan">开始扫描</string>
     <string name="stop_scan">停止扫描</string>
-    <string name="expand_search_settings">展开搜索设置</string>
-    <string name="retrieve_search_settings">收起搜索设置</string>
+    <string name="expand_search_settings">展开设置</string>
+    <string name="retrieve_search_settings">保存设置</string>
     <string name="connect_fail">连接失败</string>
     <string name="active_disconnected">断开了</string>
     <string name="disconnected">连接断开</string>
@@ -42,4 +42,14 @@
     <string name="upload">上传</string>
     <string name="download">下载</string>
     <string name="settings">设置</string>
+    <string name="setting_emergency_num">紧急联系电话</string>
+    <string name="setting_data_dir">数据存储地址</string>
+    <string name="setting_model_dir">模型存储地址</string>
+    <string name="change_model">更换模型</string>
+    <string name="change_model_fail">更换模型失败</string>
+    <string name="upload_success">上传成功</string>
+    <string name="download_success">下载成功</string>
+    <string name="change_model_success">更换模型成功</string>
+    <string name="upload_start">开始上传</string>
+    <string name="download_start">开始下载</string>
 </resources>

@@ -12,6 +12,7 @@ import com.clj.fastble.data.BleDevice;
 import com.minio.minio_android.MinioUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -131,26 +132,29 @@ public class RunnableFactory {
 
             if (files != null) {
                 for (String name : files) {
-                    Log.d(TAG, "Uploading file: " + name);
-                    client.upload(Paths.get(fileDir, name).toAbsolutePath().toString(), name);
+
+                    client.upload(fileDir + '/' + name, name, handler);
                 }
             }
-            Message uploadOk = new Message();
-            uploadOk.what = 2;
-            if(handler != null)
-                handler.sendMessage(uploadOk);
         };
     }
 
     Runnable getDownloadRunnable(String name, String modelDir, MinioUtils client, Handler handler){
         //configureClient();
         return () -> {
-            DocumentTool.addFile(modelDir + "/" + name);
-            client.download(name,modelDir + "/" + name);
-            Message downloadOk = new Message();
-            downloadOk.what = 3;
-            if(handler != null)
-                handler.sendMessage(downloadOk);
+
+            File newFile = new File(modelDir, name);
+            newFile.setWritable(true);
+            if(!newFile.exists()) {
+                try {
+                    newFile.createNewFile();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            client.download(name,modelDir + "/" + name, handler);
+
         };
     }
 }

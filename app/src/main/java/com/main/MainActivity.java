@@ -3,7 +3,6 @@ package com.main;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
-import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -11,13 +10,10 @@ import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGatt;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.AssetManager;
 import android.location.LocationManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -52,11 +48,9 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
-import com.bluetoothlegatt.BleUartDataReceiver;
 import com.bluetoothlegatt.EchartOptionUtil;
 import com.bluetoothlegatt.EchartView;
 import com.bluetoothlegatt.MotionClassifier;
-import com.bluetoothlegatt.SampleGattAttributes;
 import com.clj.blesample.DocumentTool;
 import com.clj.blesample.GattAttributes;
 import com.clj.blesample.adapter.DeviceAdapter;
@@ -70,20 +64,15 @@ import com.clj.fastble.callback.BleScanCallback;
 import com.clj.fastble.data.BleDevice;
 import com.clj.fastble.exception.BleException;
 import com.clj.fastble.scan.BleScanRuleConfig;
-
 import com.github.abel533.echarts.json.GsonOption;
 import com.main.operation.OperationActivity;
 import com.minio.minio_android.MinioUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.channels.Channel;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -103,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private TextView txt_setting;
     private Button btn_scan;
     private EditText et_name, et_mac, et_uuid;
-    private EditText minio_user, minio_password, minio_link;
+    private EditText minio_user, minio_password, minio_link, setting_emergency_num, setting_data_dir, setting_model_dir, setting_model_name;
     private Switch sw_auto;
     private ImageView img_loading;
 
@@ -117,10 +106,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     boolean mEnableRefreshLeft = false;
     boolean mEnableRefreshRight = false;
 
-    private final static String emergency_num = "10086";
-    private final static String data_dir = "/Download/bleReceived";
-    private final static String model_dir = "/Download/models";
-    private final static String model_name = "new-model.tflite";
+    private static String emergency_num = "10086";
+    private static String data_dir = "/Download/bleReceived";
+    private static String model_dir = "/Download/models";
+    private static String model_name = "new-model.tflite";
+    private static String prefix = "";
 
     ExecutorService dataPipeline;
     ExecutorService downloadPool;
@@ -204,8 +194,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 .resetBucketName("test");
 
         // initialize folders
+        prefix = Environment.getExternalStorageDirectory().getPath();
         DocumentTool.addFolder(data_dir);
         DocumentTool.addFolder(model_dir);
+
 
         mMotionClassifier = new MotionClassifier(this);
 
@@ -232,17 +224,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         //数据处理管线，串行执行所有的tasks
         dataPipeline = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>());
+                new LinkedBlockingQueue<>());
         uploadPool = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>());
+                new LinkedBlockingQueue<>());
         downloadPool = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>());
+                new LinkedBlockingQueue<>());
 
         refreshEchartsPool = new ThreadPoolExecutor(2, 5,
                 50L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<Runnable>());
+                new LinkedBlockingQueue<>());
 
         createNotificationChannel();
         emitAlert();//发送告警通知
@@ -283,10 +275,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         Log.d(TAG, "1-right-data-ok");
                         break;
                     case 2: // 2-upload-ok
-                        Toast.makeText(getApplicationContext(), "Upload Success!",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getApplicationContext(), R.string.upload_success,Toast.LENGTH_SHORT).show();
                         break;
                     case 3: // 3-download-ok
-                        Toast.makeText(getApplicationContext(), "Download Success!",Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getApplicationContext(), R.string.download_success,Toast.LENGTH_SHORT).show();
                         break;
                     case 4: // 4-model-predicted
                         xyAxis = (ArrayList<Object>) msg.obj;
@@ -294,6 +286,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
                             emitAlert();
                         }
+                        break;
+                    case 5: // 5-change-model-success
+                        Toast.makeText(getApplicationContext(), R.string.change_model_success,Toast.LENGTH_SHORT).show();
+                        break;
                 }
             }
         };
@@ -335,6 +331,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
             case R.id.txt_setting:
                 if (layout_setting.getVisibility() == View.VISIBLE) {
+                    //TODO: 在此处保存设置
+                    configureClient();
+                    configureEmergency();
+                    configurePaths();
                     layout_setting.setVisibility(View.GONE);
                     txt_setting.setText(getString(R.string.expand_search_settings));
                 } else {
@@ -365,7 +365,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             case R.id.minio_download:
                 downloadModel();
                 return true;
-            default://TODO Settings
+            case R.id.change_model:
+                File model = new File(prefix + model_dir + '/' + model_name);
+                if(model.exists() && model.length() > 0)
+                    mMotionClassifier.setModelByPath(prefix + model_dir + '/' + model_name, handler);
+                else
+                    Toast.makeText(this, R.string.change_model_fail, Toast.LENGTH_SHORT).show();
+
+            default://TODO Menu Settings
                return super.onOptionsItemSelected(item);
         }
     }
@@ -379,43 +386,79 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if(!TextUtils.isEmpty(link)) client = client.resetEndPoint(link);
     }
 
+    private void configureEmergency(){
+        String _emergency_num = setting_emergency_num.getText().toString();
+        if(!TextUtils.isEmpty(_emergency_num)) emergency_num = _emergency_num;
+    }
+
+    private void configurePaths(){
+        String _data_dir = setting_data_dir.getText().toString();
+        if(!TextUtils.isEmpty(_data_dir)) data_dir = _data_dir;
+        String _model_dir = setting_model_dir.getText().toString();
+        if(!TextUtils.isEmpty(_model_dir)) model_dir = _model_dir;
+        String _model_name = setting_model_name.getText().toString();
+        if(!TextUtils.isEmpty(_model_name)) model_name = _model_name;
+    }
+
     private void downloadModel(){
         configureClient();
-        Toast.makeText(this, "Download starting...",Toast.LENGTH_SHORT).show();
-        downloadPool.execute(threadFactory.getDownloadRunnable(model_name, model_dir, client, handler));
+        Toast.makeText(this, R.string.download_start,Toast.LENGTH_SHORT).show();
+        Log.d(TAG,
+                "Downloading " + model_name + " to "
+                        + prefix + model_dir + "." + client.toString());
+        //downloadPool.execute(threadFactory.getDownloadRunnable(model_name, model_dir, client, handler));
+        new Thread(threadFactory.getDownloadRunnable(model_name, prefix + model_dir, client, handler)).start();
     }
 
     private void uploadSavedData(){
         configureClient();
-        Toast.makeText(this, "Upload starting...",Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, R.string.upload_start,Toast.LENGTH_SHORT).show();
+        Log.d(TAG,
+                "Uploading " + prefix + data_dir
+                        + " ." + client.toString());
+        File dir = new File(prefix + data_dir);
+        String[] files = dir.list();
 
-        uploadPool.execute(threadFactory.getUploadRunnable(data_dir, client, handler));
+        if (files != null) {
+            for (String name : files) {
+
+                Log.d(TAG,
+                        "Uploading " + prefix + data_dir + '/' + name);
+            }
+        }
+        //uploadPool.execute(threadFactory.getUploadRunnable(data_dir, client, handler));
+        new Thread(threadFactory.getUploadRunnable(prefix + data_dir, client, handler)).start();
     }
 
     private void initView() {
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        btn_scan = (Button) findViewById(R.id.btn_scan);
+        btn_scan = findViewById(R.id.btn_scan);
         btn_scan.setText(getString(R.string.start_scan));
         btn_scan.setOnClickListener(this);
 
-        et_name = (EditText) findViewById(R.id.et_name);
-        et_mac = (EditText) findViewById(R.id.et_mac);
-        et_uuid = (EditText) findViewById(R.id.et_uuid);
-        sw_auto = (Switch) findViewById(R.id.sw_auto);
+        et_name = findViewById(R.id.et_name);
+        et_mac = findViewById(R.id.et_mac);
+        et_uuid = findViewById(R.id.et_uuid);
+        sw_auto = findViewById(R.id.sw_auto);
 
-        minio_user = (EditText) findViewById(R.id.minio_user);
-        minio_password = (EditText) findViewById(R.id.minio_password);
-        minio_link = (EditText) findViewById(R.id.minio_link);
+        minio_user = findViewById(R.id.minio_user);
+        minio_password = findViewById(R.id.minio_password);
+        minio_link = findViewById(R.id.minio_link);
 
-        layout_setting = (LinearLayout) findViewById(R.id.layout_setting);
-        txt_setting = (TextView) findViewById(R.id.txt_setting);
+        setting_emergency_num = findViewById(R.id.emergency_num);
+        setting_data_dir = findViewById(R.id.data_dir);
+        setting_model_dir = findViewById(R.id.model_dir);
+        setting_model_name = findViewById(R.id.model_name);
+
+        layout_setting = findViewById(R.id.layout_setting);
+        txt_setting = findViewById(R.id.txt_setting);
         txt_setting.setOnClickListener(this);
         layout_setting.setVisibility(View.GONE);
         txt_setting.setText(getString(R.string.expand_search_settings));
 
-        img_loading = (ImageView) findViewById(R.id.img_loading);
+        img_loading = findViewById(R.id.img_loading);
         operatingAnim = AnimationUtils.loadAnimation(this, R.anim.rotate);
         operatingAnim.setInterpolator(new LinearInterpolator());
         progressDialog = new ProgressDialog(this);
@@ -473,7 +516,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 });
             }
         });
-        ListView listView_device = (ListView) findViewById(R.id.list_device);
+        ListView listView_device = findViewById(R.id.list_device);
         listView_device.setAdapter(mDeviceAdapter);
     }
 

@@ -1,18 +1,29 @@
 package com.bluetoothlegatt;
 
 import android.app.Activity;
+import android.content.Context;
+import android.content.res.AssetFileDescriptor;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Message;
 import android.os.SystemClock;
 
 import android.util.Log;
 
 import androidx.annotation.RequiresApi;
 
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.common.FileUtil;
+import org.tensorflow.lite.support.common.SupportPreconditions;
 
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.List;
 //TODO: THIS CLASS NEEDS MORE MODIFICATION, AFTER REAL UNDERSTAND OF THE DEEP-LEARNING MODEL...
@@ -103,22 +114,38 @@ public class MotionClassifier {
         }
     }
 
-    public void setModelByPath(String path) throws IOException {
+    public void setModelByPath(String path, Handler handler) {
         String temp = mModelPath;
         mModelPath = path;
 
         try {
-            MappedByteBuffer tfLiteModel = FileUtil.loadMappedFile(activity, mModelPath);
+            MappedByteBuffer tfLiteModel = loadMappedFileEx(path);
             tflite = new Interpreter(tfLiteModel, tfliteOptions);
+            if(handler != null){
+                Message changedModel = new Message();
+                changedModel.what = 5;
+                changedModel.obj = path;
+                handler.sendMessage(changedModel);
+            }
 
-        } catch (IOException e) {
-            // TODO：ERROR
+        } catch (Exception e) {
             mModelPath = temp;
+            Log.e(TAG, "ERROR TO CHANGE MODEL.");
+            e.printStackTrace();
         }
     }
 
     public List<String> getLabels() {
         return labelList;
+    }
+
+    public static MappedByteBuffer loadMappedFileEx( @NonNull String filePath) throws Exception {
+        SupportPreconditions.checkNotNull(filePath, "File path cannot be null.");
+        File model = new File(filePath);
+
+        final MappedByteBuffer r = new RandomAccessFile(filePath, "r").getChannel()
+                .map(FileChannel.MapMode.READ_ONLY, 0, model.length());
+        return r;
     }
 
     public void setLabels(List<String> l){ labelList = l;}

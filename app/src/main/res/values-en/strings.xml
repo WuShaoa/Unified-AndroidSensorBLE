@@ -28,7 +28,7 @@
     <string name="mac">MAC:</string>
     <string name="service">Service</string>
     <string name="type">Service type (main service)</string>
-    <string name="scan_setting">Below, you can configure the conditions that you need to scan the device, which can be empty</string>
+    <string name="scan_setting">Configure settings, using the default value by empty</string>
     <string name="setting_name">Enter a broadcast name for Bluetooth devices, separated by English commas</string>
     <string name="setting_mac">Enter Bluetooth device MAC</string>
     <string name="setting_uuid">Enter Bluetooth device UUID, separated by commas in English</string>

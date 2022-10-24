@@ -225,10 +225,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         dataPipeline = new ThreadPoolExecutor(1, 1,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>());
-        uploadPool = new ThreadPoolExecutor(1, 1,
+        uploadPool = new ThreadPoolExecutor(5, 10,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>());
-        downloadPool = new ThreadPoolExecutor(1, 1,
+        downloadPool = new ThreadPoolExecutor(5, 10,
                 0L, TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>());
 
@@ -406,8 +406,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Log.d(TAG,
                 "Downloading " + model_name + " to "
                         + prefix + model_dir + "." + client.toString());
-        //downloadPool.execute(threadFactory.getDownloadRunnable(model_name, model_dir, client, handler));
-        new Thread(threadFactory.getDownloadRunnable(model_name, prefix + model_dir, client, handler)).start();
+        downloadPool.execute(threadFactory.getDownloadRunnable(model_name, prefix + model_dir, client, handler));
+        //new Thread(threadFactory.getDownloadRunnable(model_name, prefix + model_dir, client, handler)).start();
     }
 
     private void uploadSavedData(){
@@ -426,8 +426,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         "Uploading " + prefix + data_dir + '/' + name);
             }
         }
-        //uploadPool.execute(threadFactory.getUploadRunnable(data_dir, client, handler));
-        new Thread(threadFactory.getUploadRunnable(prefix + data_dir, client, handler)).start();
+        uploadPool.execute(threadFactory.getUploadRunnable(prefix + data_dir, client, handler));
+        //new Thread(threadFactory.getUploadRunnable(prefix + data_dir, client, handler)).start();
     }
 
     private void initView() {

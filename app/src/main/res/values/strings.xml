@@ -45,7 +45,7 @@
     <string name="setting_minio_user" translatable="false">Minio用户名</string>
     <string name="setting_minio_password" translatable="false">Minio密码</string>
     <string name="setting_minio_link" translatable="false">Minio服务地址</string>
-    <string name="alert_notification" translatable="false">您没事吧？（紧急电话将在五秒钟后自动拨打）</string>
+    <string name="alert_notification" translatable="false">您没事吧？（未反馈则紧急电话将在10秒钟后自动拨打）</string>
     <string name="alert_yes" translatable="false">我有事！</string>
     <string name="alert_no" translatable="false">我没事。</string>
     <string name="file_access" translatable="false">请勾选文件权限</string>

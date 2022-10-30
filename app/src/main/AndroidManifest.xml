@@ -59,7 +59,8 @@
         </activity>
 
         <activity android:name=".operation.OperationActivity" />
-
+        <receiver android:name=".MainActivity$ButtonReceiver"
+            tools:ignore="Instantiatable" />
     </application>
 
 </manifest>

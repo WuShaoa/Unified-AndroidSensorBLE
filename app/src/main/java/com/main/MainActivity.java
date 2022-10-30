@@ -109,15 +109,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     boolean mEnableRefreshLeft = false;
     boolean mEnableRefreshRight = false;
 
+    private boolean alert_flag = true;
+
     private static final String ALERT_YES_BUTTON_CLICKED = "ACTION_ALERT_YES_BUTTON_CLICKED";
     private static final String ALERT_NO_BUTTON_CLICKED = "ACTION_ALERT_NO_BUTTON_CLICKED";
     private static final String default_dev_name = "ATK-BLE01";
-    private static String emergency_num = "10086";
-    private static String data_dir = "/Download/bleReceived";
-    private static String model_dir = "/Download/models";
-    private static String model_name = "new-model.tflite";
+    private String emergency_num = "10086";
+    private String data_dir = "/Download/bleReceived";
+    private String model_dir = "/Download/models";
+    private String model_name = "new-model.tflite";
     private static String prefix = "";
-    private static final long delay = 5000;
+    private static final long delay = 10000;
 
     private ButtonReceiver btnReceiver;
 
@@ -138,33 +140,33 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     // Alert notification settings
     private void emitAlert(){
-        handler.postDelayed(callProc, delay);
+        //timer call
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            handler.postDelayed(callProc, 0,delay);
+        } else {handler.postDelayed(callProc, delay);}
 
         RemoteViews alertView = new RemoteViews(getPackageName(), R.layout.notification_layout);//远程视图
 
-        Intent mainIntent = new Intent(this, MainActivity.class);
-        Intent callIntent = new Intent(Intent.ACTION_CALL);
-        callIntent.setData(Uri.parse("tel:" + emergency_num));
-        mainIntent.setAction(ALERT_NO_BUTTON_CLICKED);
-        callIntent.setAction(ALERT_YES_BUTTON_CLICKED);
+            Intent mainIntent = new Intent(ALERT_NO_BUTTON_CLICKED);
+            Intent callIntent = new Intent(ALERT_YES_BUTTON_CLICKED);
 
-        PendingIntent pending_intent_no;
-        PendingIntent pending_intent_yes;
+            PendingIntent pending_intent_no;
+            PendingIntent pending_intent_yes;
 
-        pending_intent_no = PendingIntent.getBroadcast(this, 0, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-        pending_intent_yes = PendingIntent.getActivity(this, 1, callIntent, PendingIntent.FLAG_MUTABLE);
+            pending_intent_no = PendingIntent.getBroadcast(this, 0, mainIntent, PendingIntent.FLAG_MUTABLE);
+            pending_intent_yes = PendingIntent.getBroadcast(this, 1, callIntent, PendingIntent.FLAG_MUTABLE);
 
-        alertView.setOnClickPendingIntent(R.id.alert_btn_no, pending_intent_no);
-        alertView.setOnClickPendingIntent(R.id.alert_btn_yes, pending_intent_yes);
+            alertView.setOnClickPendingIntent(R.id.alert_btn_no, pending_intent_no);
+            alertView.setOnClickPendingIntent(R.id.alert_btn_yes, pending_intent_yes);
 
-        NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
-                .setCustomContentView(alertView)
-                .setPriority(NotificationCompat.PRIORITY_HIGH);
-                //.setContentIntent(pending_intent_no);
-//                .setAutoCancel(true)
-        alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
+            NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
+                    .setCustomContentView(alertView)
+                    //.setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true);
+            //.setContentIntent(pending_intent_no);
+            alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
     }
 
     private void createNotificationChannel() {
@@ -181,20 +183,33 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         alertManager.createNotificationChannel(channel);
     }
 
-    static class ButtonReceiver extends BroadcastReceiver {
+    public static class ButtonReceiver extends BroadcastReceiver {
         Handler handler;
         Runnable callProc;
-        ButtonReceiver(Handler h, Runnable c){ handler = h; callProc = c;}
+        NotificationManager alertMana;
+        ButtonReceiver(Handler h, Runnable c, NotificationManager nm){ handler = h; callProc = c; alertMana = nm;}
         @Override
-        public void onReceive(Context context, Intent intent) {
-            if(intent != null && (intent.getAction().equals(ALERT_YES_BUTTON_CLICKED) ||
-                                  intent.getAction().equals(ALERT_NO_BUTTON_CLICKED))){
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    if (handler.hasCallbacks(callProc))
-                        handler.removeCallbacks(callProc);
+        public void onReceive(Context context, Intent intent ) {
+            if(intent != null && intent.getAction().equals(ALERT_NO_BUTTON_CLICKED)){
+                //cancel timer call
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    handler.removeCallbacksAndMessages(0);
                 } else {
-                    handler.removeCallbacks(callProc);
+                    handler.removeCallbacks(callProc);//may not work
                 }
+                alertMana.cancelAll();
+                Log.d(TAG, ALERT_NO_BUTTON_CLICKED + " Intent Received");
+            } else if (intent != null && intent.getAction().equals(ALERT_YES_BUTTON_CLICKED)){
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    handler.removeCallbacksAndMessages(0);
+                } else {
+                    handler.removeCallbacks(callProc);//may not work
+                }
+
+                handler.post(callProc);
+                alertMana.cancelAll();
+                //TODO: recording truly fall
+                Log.d(TAG, ALERT_YES_BUTTON_CLICKED + " Intent Received");
             }
         }
     }
@@ -205,13 +220,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         setContentView(R.layout.activity_main);
         initView();
 
+        setPipelines();
         setHandler(); //Handling all messages!
-        //TODO: timer calling
+        //register intent receiver
         Intent callIntent = new Intent(Intent.ACTION_CALL);
         callIntent.setData(Uri.parse("tel:" + emergency_num));
 
         callProc = () -> startActivity(callIntent);
-        btnReceiver = new ButtonReceiver(handler, callProc);
 
         DocumentTool.verifyStoragePermissions(MainActivity.this);
 
@@ -256,22 +271,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         });
 
-        //数据处理管线，串行执行所有的tasks
-        dataPipeline = new ThreadPoolExecutor(1, 1,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>());
-        uploadPool = new ThreadPoolExecutor(5, 10,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>());
-        downloadPool = new ThreadPoolExecutor(5, 10,
-                0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>());
-
-        refreshEchartsPool = new ThreadPoolExecutor(2, 5,
-                50L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>());
-
         createNotificationChannel();
+
+        setReceiver();
+
         emitAlert();//发送告警通知
 
     }
@@ -291,6 +294,23 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 GsonOption op = EchartOptionUtil.getLineChartOptions(x, roll, pitch, yaw, "Right");
                 runOnUiThread(() -> mLineChartRight.refreshEchartsWithOption(op));});
         }
+    }
+
+    private void setPipelines() {
+        //数据处理管线，串行执行所有的tasks
+        dataPipeline = new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        uploadPool = new ThreadPoolExecutor(5, 10,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+        downloadPool = new ThreadPoolExecutor(5, 10,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
+
+        refreshEchartsPool = new ThreadPoolExecutor(1, 1,
+                50L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>());
     }
 
     private void setHandler(){
@@ -320,8 +340,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         xyAxis = (ArrayList<Object>) msg.obj;
                         Log.d(TAG, "predict Result: " + xyAxis.get(1).toString());
                         if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
-                            emitAlert();
-                            onPause();
+                            if(alert_flag) {
+                                emitAlert();
+                                alert_flag = false;
+                            }
+                            //onPause();
                         }
                         break;
                     case 5: // 5-change-model-success
@@ -332,22 +355,32 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         };
     }
 
+    private void setReceiver(){
+        // after init of callProc & alertManager
+        btnReceiver = new ButtonReceiver(handler, callProc, alertManager);
+
+        IntentFilter fil = new IntentFilter();
+        fil.addAction(ALERT_YES_BUTTON_CLICKED);
+        fil.addAction(ALERT_NO_BUTTON_CLICKED);
+        registerReceiver(btnReceiver, fil);
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
-        handler = null;
+        //handler = new Handler(Looper.getMainLooper());
+        //refreshEchartsPool.shutdown();
+        //dataPipeline.shutdown();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
         showConnectedDevice();
+        //setPipelines();
         setHandler();
-
-        IntentFilter fil = new IntentFilter();
-        fil.addAction(ALERT_YES_BUTTON_CLICKED);
-        fil.addAction(ALERT_NO_BUTTON_CLICKED);
-        registerReceiver(btnReceiver, fil);
+        setReceiver();
+        alert_flag = true;//TODO: is it the right place to reset the flag?
     }
 
     @Override
@@ -377,6 +410,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     configureClient();
                     configureEmergency();
                     configurePaths();
+
                     layout_setting.setVisibility(View.GONE);
                     txt_setting.setText(getString(R.string.expand_search_settings));
                 } else {
@@ -430,7 +464,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void configureEmergency(){
         String _emergency_num = setting_emergency_num.getText().toString();
-        if(!TextUtils.isEmpty(_emergency_num)) emergency_num = _emergency_num;
+        if(!TextUtils.isEmpty(_emergency_num)) {
+            emergency_num = _emergency_num;
+            //update callProc
+            Intent callIntent = new Intent(Intent.ACTION_CALL);
+            callIntent.setData(Uri.parse("tel:" + emergency_num));
+
+            callProc = () -> startActivity(callIntent);
+
+            //update receiver(because callProc changed)
+            setReceiver();
+        }
     }
 
     private void configurePaths(){

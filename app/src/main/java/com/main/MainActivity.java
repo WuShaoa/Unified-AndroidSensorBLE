@@ -9,11 +9,14 @@ import android.app.PendingIntent;
 import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothGatt;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -106,11 +109,17 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     boolean mEnableRefreshLeft = false;
     boolean mEnableRefreshRight = false;
 
+    private static final String ALERT_YES_BUTTON_CLICKED = "ACTION_ALERT_YES_BUTTON_CLICKED";
+    private static final String ALERT_NO_BUTTON_CLICKED = "ACTION_ALERT_NO_BUTTON_CLICKED";
+    private static final String default_dev_name = "ATK-BLE01";
     private static String emergency_num = "10086";
     private static String data_dir = "/Download/bleReceived";
     private static String model_dir = "/Download/models";
     private static String model_name = "new-model.tflite";
     private static String prefix = "";
+    private static final long delay = 5000;
+
+    private ButtonReceiver btnReceiver;
 
     ExecutorService dataPipeline;
     ExecutorService downloadPool;
@@ -118,6 +127,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     ExecutorService refreshEchartsPool;
     RunnableFactory threadFactory = new RunnableFactory();
     Handler handler = new Handler(Looper.getMainLooper());
+    Runnable callProc;
 
     private Animation operatingAnim;
     private DeviceAdapter mDeviceAdapter;
@@ -128,19 +138,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     // Alert notification settings
     private void emitAlert(){
+        handler.postDelayed(callProc, delay);
 
         RemoteViews alertView = new RemoteViews(getPackageName(), R.layout.notification_layout);//远程视图
 
         Intent mainIntent = new Intent(this, MainActivity.class);
         Intent callIntent = new Intent(Intent.ACTION_CALL);
         callIntent.setData(Uri.parse("tel:" + emergency_num));
+        mainIntent.setAction(ALERT_NO_BUTTON_CLICKED);
+        callIntent.setAction(ALERT_YES_BUTTON_CLICKED);
 
         PendingIntent pending_intent_no;
         PendingIntent pending_intent_yes;
 
-        pending_intent_no = PendingIntent.getActivity(this, 0, mainIntent, PendingIntent.FLAG_MUTABLE);
+        pending_intent_no = PendingIntent.getBroadcast(this, 0, mainIntent, PendingIntent.FLAG_UPDATE_CURRENT);
         pending_intent_yes = PendingIntent.getActivity(this, 1, callIntent, PendingIntent.FLAG_MUTABLE);
-
 
         alertView.setOnClickPendingIntent(R.id.alert_btn_no, pending_intent_no);
         alertView.setOnClickPendingIntent(R.id.alert_btn_yes, pending_intent_yes);
@@ -148,11 +160,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         NotificationCompat.Builder alertBuilder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setStyle(new NotificationCompat.DecoratedCustomViewStyle())
-                .setCustomContentView(alertView);
+                .setCustomContentView(alertView)
+                .setPriority(NotificationCompat.PRIORITY_HIGH);
                 //.setContentIntent(pending_intent_no);
 //                .setAutoCancel(true)
         alertManager.notify(NOTIFICATION_ID, alertBuilder.build());
-        //onPause();
     }
 
     private void createNotificationChannel() {
@@ -167,7 +179,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         // or other notification behaviors after this
         alertManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
         alertManager.createNotificationChannel(channel);
+    }
 
+    static class ButtonReceiver extends BroadcastReceiver {
+        Handler handler;
+        Runnable callProc;
+        ButtonReceiver(Handler h, Runnable c){ handler = h; callProc = c;}
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if(intent != null && (intent.getAction().equals(ALERT_YES_BUTTON_CLICKED) ||
+                                  intent.getAction().equals(ALERT_NO_BUTTON_CLICKED))){
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (handler.hasCallbacks(callProc))
+                        handler.removeCallbacks(callProc);
+                } else {
+                    handler.removeCallbacks(callProc);
+                }
+            }
+        }
     }
 
     @Override
@@ -177,6 +206,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         initView();
 
         setHandler(); //Handling all messages!
+        //TODO: timer calling
+        Intent callIntent = new Intent(Intent.ACTION_CALL);
+        callIntent.setData(Uri.parse("tel:" + emergency_num));
+
+        callProc = () -> startActivity(callIntent);
+        btnReceiver = new ButtonReceiver(handler, callProc);
 
         DocumentTool.verifyStoragePermissions(MainActivity.this);
 
@@ -238,6 +273,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         createNotificationChannel();
         emitAlert();//发送告警通知
+
     }
 
     private void refreshLineChartLeft(Object[] x, Object[] roll, Object[] pitch, Object[] yaw){
@@ -285,6 +321,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         Log.d(TAG, "predict Result: " + xyAxis.get(1).toString());
                         if(((Float[]) xyAxis.get(1))[0] > MotionClassifier.PROB_THRESHOLD) {
                             emitAlert();
+                            onPause();
                         }
                         break;
                     case 5: // 5-change-model-success
@@ -306,6 +343,11 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onResume();
         showConnectedDevice();
         setHandler();
+
+        IntentFilter fil = new IntentFilter();
+        fil.addAction(ALERT_YES_BUTTON_CLICKED);
+        fil.addAction(ALERT_NO_BUTTON_CLICKED);
+        registerReceiver(btnReceiver, fil);
     }
 
     @Override
@@ -322,7 +364,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 //DocumentTool.verifyStoragePermissions(MainActivity.this);
                 if (btn_scan.getText().equals(getString(R.string.start_scan))) {
                     checkPermissions();
-//                    setScanRule();
+                    setScanRule();
 //                    startScan();
                 } else if (btn_scan.getText().equals(getString(R.string.stop_scan))) {
                     BleManager.getInstance().cancelScan();
@@ -559,7 +601,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         String[] names;
         String str_name = et_name.getText().toString();
         if (TextUtils.isEmpty(str_name)) {
-            names = new String[] {"ATK-BLE01"};
+            names = new String[] {default_dev_name};
         } else {
             names = str_name.split(",");
         }
@@ -622,6 +664,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 img_loading.setVisibility(View.INVISIBLE);
                 btn_scan.setText(getString(R.string.start_scan));
                 progressDialog.dismiss();
+
+                //连接失败时显示扫描按钮
+                btn_scan.setVisibility(Button.VISIBLE);
+
                 Toast.makeText(MainActivity.this, getString(R.string.connect_fail), Toast.LENGTH_LONG).show();
             }
 
@@ -630,6 +676,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 progressDialog.dismiss();
                 mDeviceAdapter.addDevice(bleDevice);
                 mDeviceAdapter.notifyDataSetChanged();
+
+                //连接成功时隐藏扫描按钮
+                btn_scan.setVisibility(Button.INVISIBLE);
             }
 
             @Override
@@ -638,6 +687,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
                 mDeviceAdapter.removeDevice(bleDevice);
                 mDeviceAdapter.notifyDataSetChanged();
+
+                //断联时显示扫描按钮
+                btn_scan.setVisibility(Button.VISIBLE);
 
                 if (isActiveDisConnected) {
                     Toast.makeText(MainActivity.this, getString(R.string.active_disconnected), Toast.LENGTH_LONG).show();
